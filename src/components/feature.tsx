@@ -27,39 +27,39 @@ function processCode(codeWrapper: HTMLElement) {
         }
     });
 
-    let selecting = false;
+    // let selecting = false;
 
     // TODO 应该是这样：点击后 → 计算 selected range → selected range 直接指向触发的那个 span → 那个 span 选中一次
 
-    window.addEventListener('mousedown', (e: MouseEvent) => {
-        if (!(e.target instanceof Node && codeWrapper.contains(e.target))){
-            console.log(`focus out! the target is`, e.target, codeWrapper);
-            targetSpans.forEach((span) => {
-                span.classList.remove('selected');
-            });
-        } else {
-            console.log(`focus in! the target is`, e.target, codeWrapper);
-        }
-    });
-    codeWrapper.addEventListener('mousedown', (e) => {
-        targetSpans.forEach((span) => {
-            span.classList.remove('selected');
-        });
-        if (e.target instanceof HTMLElement) {
-            selecting = true;
-        }
-    });
-    codeWrapper.addEventListener('mouseup', () => {
-        selecting = false;
-    });
-    targetSpans.forEach((span) => {
-        span.addEventListener('mouseover', () => {
-            // console.log(`mouse over on ${span.textContent}`);
-            if (selecting) {
-                span.classList.add('selected');
-            }
-        });
-    });
+    // window.addEventListener('mousedown', (e: MouseEvent) => {
+    //     if (!(e.target instanceof Node && codeWrapper.contains(e.target))){
+    //         console.log(`focus out! the target is`, e.target, codeWrapper);
+    //         targetSpans.forEach((span) => {
+    //             span.classList.remove('selected');
+    //         });
+    //     } else {
+    //         console.log(`focus in! the target is`, e.target, codeWrapper);
+    //     }
+    // });
+    // codeWrapper.addEventListener('mousedown', (e) => {
+    //     targetSpans.forEach((span) => {
+    //         span.classList.remove('selected');
+    //     });
+    //     if (e.target instanceof HTMLElement) {
+    //         selecting = true;
+    //     }
+    // });
+    // codeWrapper.addEventListener('mouseup', () => {
+    //     selecting = false;
+    // });
+    // targetSpans.forEach((span) => {
+    //     span.addEventListener('mouseover', () => {
+    //         // console.log(`mouse over on ${span.textContent}`);
+    //         if (selecting) {
+    //             span.classList.add('selected');
+    //         }
+    //     });
+    // });
 }
 
 type CodeBlockProps = {
