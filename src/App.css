@@ -6,6 +6,10 @@
   font-family: 'Montserrat', 'Segoe UI', Tahoma, sans-serif;
 }
 
+pre {
+  background-color: #f6f5f3;
+}
+
 code {
   font-family: 'Cascadia Code', 'Courier New', Courier, monospace;
 }
@@ -15,7 +19,6 @@ code {
   padding: 1em;
   border-radius: 0.5em;
   
-  background-color: #f6f5f3;
   line-height: 1.1em;
 }
 
@@ -67,4 +70,12 @@ code {
 
 .label-badge:hover {
   opacity: 0.8;
+}
+
+.label-badge.add-label {
+  opacity: 0.6
+}
+
+.label-badge.add-label:hover {
+  opacity: 0.4
 }

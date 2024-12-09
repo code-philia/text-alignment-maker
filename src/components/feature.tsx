@@ -3,7 +3,6 @@ import { IconArrowRight, IconArrowLeft, IconPlus } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
-import { range } from '@mantine/hooks';
 
 const demoFileServer = 'http://localhost:8080';
 const demoResultsDirectory = '/home/yuhuan/projects/cophi/vis-feat-proto/auto_labelling/';
@@ -16,36 +15,199 @@ const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
 type Sample = {
     text: string,
     tokens: string[],
-    groupedRanges: number[][];
+    labelingRanges: number[][];
 }
 
 const commentSamples: Sample[] = [
     {
         text: comment_text,
         tokens: comment_tokens,
-        groupedRanges: code_comment_labels.map((group) => group[0])
+        labelingRanges: code_comment_labels.map((group) => group[0])
     }
 ];
 const codeSamples: Sample[] = [
     {
         text: code_text,
         tokens: code_tokens,
-        groupedRanges: code_comment_labels.map((group) => group[1])
+        labelingRanges: code_comment_labels.map((group) => group[1])
     }
 ];
 
-function convertPairedRangesToIndices(ranges: number[]) {
-    const indices = [];
+class Ranges {
+    value: number[];
 
-    for (let i = 0; i < range.length; ++i) {
-        if (i + 1 >= ranges.length) break;
+    constructor(value: number[]) {
+        this.value = value;
+    }
 
-        for (let j = ranges[i]; j <= ranges[i + 1]; ++j) {
-            indices.push(j);
+    expand() {
+        const indices = [];
+        const ranges = this.value;
+
+        for (let i = 0; i < ranges.length; i += 2) {
+            if (i + 1 >= ranges.length) break;
+
+            for (let j = ranges[i]; j <= ranges[i + 1]; ++j) {
+                indices.push(j);
+            }
+        }
+
+        return indices;
+    }
+
+    static reduceFrom(indices: number[]): Ranges {
+        // make indices sorted
+        indices.sort((a, b) => a - b);
+
+        const ranges: number[] = [];
+
+        let start = indices[0];
+        let end = indices[0];
+        for (let i = 1; i < indices.length; ++i) {
+            if (indices[i] <= end + 1) {
+                if (indices[i] == end + 1) {
+                    end = indices[i];
+                }
+            } else {
+                ranges.push(start, end);
+                start = indices[i];
+                end = indices[i];
+            }
+        }
+        ranges.push(start, end);
+
+        return new Ranges(ranges);
+    }
+}
+
+function matchToIndices(match: number[][][]): number[][][] {
+    return match.map(
+        (label) => label.map((group) => new Ranges(group).expand())
+    );
+}
+
+function indicesToMatch(indices: number[][][]): number[][][] {
+    return indices.map(
+        (label) => label.map((group) => Ranges.reduceFrom(group).value)
+    );
+}
+
+const commentGroup = 0;
+const codeGroup = 1;
+class LabelingProvider {
+    // suppose the first group is comment and the second group is code
+    private indicesOfEachSampleByLabelByGroup: Map<number, number[][][]> = new Map();
+    private onSave?: (dumped: string) => void;
+
+    constructor(content: string, onSave?: (dumped: string) => void) {
+        const lines = content.split('\n');
+        lines.forEach((line) => {
+            const parsed = this.parseSample(line);
+            if (parsed) {
+                const [idx, ranges] = parsed;
+                this.indicesOfEachSampleByLabelByGroup.set(idx, ranges);
+            }
+        });
+
+        this.onSave = onSave;
+    }
+
+    private parseSample(line: string): [number, number[][][]] | undefined {
+        try {
+            const sampleData = JSON.parse(line);
+            const idx = sampleData['idx'];
+            if (typeof idx !== 'number') {
+                throw new Error(`Invalid sample data: idx ${idx} is not a number`);
+            }
+
+            const match = sampleData['match'];
+            if (!Array.isArray(match)
+                || !match.every((label) => Array.isArray(label)
+                    && label.every((group) => Array.isArray(group)
+                        && group.every((num) => typeof num === 'number')))) {
+                throw new Error(`Invalid sample data: match is not a number[][][]`);
+            }
+
+            const parsedRanges = matchToIndices(match);
+
+            return [idx, parsedRanges];
+        } catch (error) {
+            console.error('Cannot parse json line: ', error);
+            return undefined;
         }
     }
 
-    return indices;
+    getNumOfLabels(sample: number) {
+        return this.indicesOfEachSampleByLabelByGroup.get(sample)?.length ?? 0;
+    }
+
+    getTokensOnLabel(sample: number, group: number, label: number) {
+        return this.indicesOfEachSampleByLabelByGroup.get(sample)?.[label]?.[group];
+    }
+
+    addTokensOnLabel(sample: number, group: number, label: number, tokens: number[]) {
+        const indicesOfSample = this.indicesOfEachSampleByLabelByGroup.get(sample);
+        if (!indicesOfSample) {
+            this.indicesOfEachSampleByLabelByGroup.set(sample, Array.from({ length: label + 1 }, () => []));
+        }
+
+        const indicesOfSampleByLabel = this.indicesOfEachSampleByLabelByGroup.get(sample);
+        if (!indicesOfSampleByLabel) {
+            return;
+        }
+
+        const indicesOfSampleByLabelByGroup = indicesOfSampleByLabel[group];
+        if (!indicesOfSampleByLabelByGroup) {
+            return;
+        }
+
+        indicesOfSampleByLabelByGroup.push(tokens);
+    }
+
+    removeTokensOnLabel(sample: number, group: number, label: number, tokens: number[]) {
+        const indicesOfSample = this.indicesOfEachSampleByLabelByGroup.get(sample);
+        if (!indicesOfSample) {
+            return;
+        }
+
+        const indicesOfSampleByLabel = indicesOfSample[label];
+        if (!indicesOfSampleByLabel) {
+            return;
+        }
+
+        const indicesOfSampleByLabelByGroup = indicesOfSampleByLabel[group];
+        if (!indicesOfSampleByLabelByGroup) {
+            return;
+        }
+
+        const tokensSet = new Set(tokens);
+        const newIndices = indicesOfSampleByLabelByGroup.filter((idx) => {
+            return tokensSet.has(idx);
+        });
+
+        indicesOfSampleByLabelByGroup.length = 0;
+        indicesOfSampleByLabelByGroup.push(...newIndices);
+    }
+
+    removeTokensFromAllLabels(sample: number, group: number, tokens: number[]) {
+        for (let i = 0; i < this.getNumOfLabels(sample); ++i) {
+            this.removeTokensOnLabel(sample, group, i, tokens);
+        }
+    }
+
+    // load() {
+
+    // }
+
+    save() {
+        if (this.onSave) {
+            const dumped = Array.from(this.indicesOfEachSampleByLabelByGroup.entries())
+                .map(([idx, indicesOfSample]) => JSON.stringify({ idx, match: indicesToMatch(indicesOfSample) }))
+                .join('\n');
+
+            this.onSave(dumped);
+        }
+    }
 }
 
 function isSpecialToken(token: string) {
@@ -405,9 +567,10 @@ type AlignmentLabel = {
 type AlignmentLabelsProps = {
     labels: AlignmentLabel[];
     setLabels: (labels: AlignmentLabel[]) => void;
+    onClickLabel?: (index: number) => void;
 }
 
-function AlignmentLabels({ labels, setLabels } : AlignmentLabelsProps) {
+function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsProps) {
     const [newLabelText, setNewLabelText] = useState('');
     const [newLabelColor, setNewLabelColor] = useState('#000000');
     const [modalOpened, setModalOpened] = useState(false);
@@ -425,12 +588,20 @@ function AlignmentLabels({ labels, setLabels } : AlignmentLabelsProps) {
         <>
             <div style={{ padding: '20px' }}>
                 <Group gap="sm">
+                    <Badge
+                        color='black'
+                        className='label-badge remove-label'
+                        onClick={() => onClickLabel?.(-1)}
+                    >
+                        No Label
+                    </Badge>
                     {labels.map((label, index) => (
                         <Badge
                             key={index}
                             color={label.color}
                             variant="filled"
                             className='label-badge'
+                            onClick={() => onClickLabel?.(index)}
                         >
                             {label.text}
                         </Badge>
@@ -498,14 +669,43 @@ export function Feature() {
     // Data
     // const [sampleTokens, setSampleTokens] = useState<string[][]>(Array(30).fill(0).map((_, i) => [(i + 1).toString()]));
     // const [sampleLabelling, setSampleLabelling] = useState<string[]>([]);
+    const labelingProvider = useRef<LabelingProvider>(new LabelingProvider('', (dumped) => {
+        setDumpedString(dumped);
+        setModalOpened(true);
+        console.log(dumped);
+    }));
+
+    // Data Saving
+    const [dumpedString, setDumpedString] = useState('');
+    const [modalOpened, setModalOpened] = useState(false);
 
     // Navigation
-    const [currentIndex, setCurrentIndex] = useState(0);
+    const [currentSampleIndex, setCurrentSampleIndex] = useState(0);
     // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
 
     // Labeling
     const [labels, setLabels] = useState<Label[]>([]);
+    const [selectedCodeTokens, setSelectedCodeTokens] = useState<number[]>([]);
+    const [selectedCommentTokens, setSelectedCommentTokens] = useState<number[]>([]);
 
+    const setLabelofTokens = (group: number, label: number, tokens: number[]) => {
+        if (label < 0) {
+            labelingProvider.current.removeTokensFromAllLabels(currentSampleIndex, group, tokens);
+        } else {
+            labelingProvider.current.addTokensOnLabel(currentSampleIndex, group, label, tokens);
+        }
+    };
+
+    const clickLabelCallback = (labelIndex: number) => {
+        if (selectedCodeTokens.length > 0) {
+            setLabelofTokens(codeGroup, labelIndex, selectedCodeTokens);
+        }
+        if (selectedCommentTokens.length > 0) {
+            setLabelofTokens(commentGroup, labelIndex, selectedCommentTokens);
+        }
+    };
+
+    // A test function of fetch
     const loadFileCallback = useCallback(() => {
         fetch(`${optionLocalServer}${demoLabelingFilePath}`)
             .then((response) => response.text())
@@ -531,14 +731,14 @@ export function Feature() {
     // }, []);
 
     // Code Area
-    const codeArea = (sample: Sample, labels: Label[]) => {
+    const codeArea = (sample: Sample, labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
         return (
             <CodeBlock
                 code={sample.text}
                 tokens={sample.tokens}
-                groupedTokenIndices={sample.groupedRanges.map((ranges) => convertPairedRangesToIndices(ranges))}
+                groupedTokenIndices={sample.labelingRanges.map((ranges) => new Ranges(ranges).expand())}
                 groupColors={labels.map((label) => label.color)}
-                onTokenSelectionChange={(selectedTokenIndices) => { console.log('Selected tokens: ', selectedTokenIndices); }}
+                onTokenSelectionChange={onTokenSelectionChange}
             />
         );
     };
@@ -547,13 +747,13 @@ export function Feature() {
     useEffect(() => {
         // Set up labels and colors
         const numOfLabels = Math.max(
-            commentSamples[currentIndex].groupedRanges.length,
-            codeSamples[currentIndex].groupedRanges.length
+            commentSamples[currentSampleIndex].labelingRanges.length,
+            codeSamples[currentSampleIndex].labelingRanges.length
         );
         const defaultGeneratedColors = generateColorForLabels(numOfLabels);
 
         setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
-    }, [currentIndex]);
+    }, [currentSampleIndex]);
 
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
@@ -590,20 +790,21 @@ export function Feature() {
             <Space h='md'></Space>
             <Center>
                 <NumberNavigationProps
-                    value={currentIndex}
+                    value={currentSampleIndex}
                     total={commentSamples.length}
-                    onChangeValue={setCurrentIndex}
+                    onChangeValue={setCurrentSampleIndex}
                 />
             </Center>
             <Center>
                 <AlignmentLabels
                     labels={labels}
                     setLabels={setLabels}
+                    onClickLabel={clickLabelCallback}
                 />
             </Center>
             <Group gap='sm' justify='center'>
-                {codeArea(commentSamples[currentIndex], labels)}
-                {codeArea(codeSamples[currentIndex], labels)}
+                {codeArea(commentSamples[currentSampleIndex], labels, setSelectedCommentTokens)}
+                {codeArea(codeSamples[currentSampleIndex], labels, setSelectedCodeTokens)}
             </Group>
             {/* <TagsInput
                 value={selectedIndices}
@@ -612,6 +813,16 @@ export function Feature() {
                 clearable
             >
             </TagsInput> */}
-    </div>
-  );
+            <Modal
+                opened={modalOpened}
+                onClose={() => setModalOpened(false)}
+                title="Dumped String"
+                size="lg"
+            >
+                <pre>
+                    <code>{dumpedString}</code>
+                </pre>
+            </Modal>
+        </div>
+    );
 }
