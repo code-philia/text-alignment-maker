@@ -196,7 +196,28 @@ function expandSelectedRanges(selection: Selection, targetSpans: HTMLElement[]) 
     }
 }
 
-function processCodeStyle(code: HTMLElement) {
+const tokenIndexPrefix = 'token-';
+const labelPrefix = 'label-';
+
+function getFollowingNumber(cls: string, prefix: string) {
+    if (cls.startsWith(prefix)) {
+        const labelNumber = parseInt(cls.slice(prefix.length));
+        if (!isNaN(labelNumber)) {
+            return labelNumber;
+        }
+    }
+    return undefined;
+};
+function getNumberOfElement(element: HTMLElement, prefix: string) {
+    for (const cls of element.classList) {
+        const labelNumber = getFollowingNumber(cls, prefix);
+        if (labelNumber !== undefined) {
+            return labelNumber;
+        }
+    }
+    return undefined;
+};
+function processCodeStyle(code: HTMLElement, onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) {
     const targetSpans: HTMLElement[] = [];
 
     code.childNodes.forEach((node) => {
@@ -217,13 +238,22 @@ function processCodeStyle(code: HTMLElement) {
         const selection = window.getSelection();
         if (focused && selection && selection.rangeCount > 0) {
             const selectedElements = new Set(getSelectedNodes(selection, Array.from(code.childNodes)));
+
+            const selectedTokenIndices: number[] = [];
             targetSpans.forEach((span) => {
                 if (selectedElements.has(span)) {
+                    const tokenIndex = getFollowingNumber(span.classList[0], tokenIndexPrefix);
+                    if (tokenIndex !== undefined) {
+                        selectedTokenIndices.push(tokenIndex);
+                    }
+
                     span.classList.add('selected');
                 } else {
                     span.classList.remove('selected');
                 }
             });
+
+            onTokenSelectionChange?.(selectedTokenIndices);
         } else {
             targetSpans.forEach((span) => {
                 span.classList.remove('selected');
@@ -267,25 +297,6 @@ function processCodeStyle(code: HTMLElement) {
     };
 }
 
-const labelPrefix = 'label-';
-const getLabelNumber = (cls: string) => {
-    if (cls.startsWith(labelPrefix)) {
-        const labelNumber = parseInt(cls.slice(labelPrefix.length));
-        if (!isNaN(labelNumber)) {
-            return labelNumber;
-        }
-    }
-    return undefined;
-};
-const getLabelNumberOfElement = (element: HTMLElement) => {
-    for (const cls of element.classList) {
-        const labelNumber = getLabelNumber(cls);
-        if (labelNumber !== undefined) {
-            return labelNumber;
-        }
-    }
-    return undefined;
-};
 const getMantineColor = (colorLiteral: string) => {
     return `var(--mantine-color-${colorLiteral}-filled)`;
 };
@@ -299,7 +310,7 @@ function processTokens(code: HTMLElement, groupColors: string[]) {
     });
 
     targetSpans.forEach((span) => {
-        const labelNumber = getLabelNumberOfElement(span);
+        const labelNumber = getNumberOfElement(span, labelPrefix);
         if (labelNumber !== undefined) {
             span.style.color = getMantineColor(groupColors[labelNumber]);
         }
@@ -311,16 +322,17 @@ type CodeBlockProps = {
     tokens: string[];
     groupedTokenIndices: number[][];
     groupColors: string[];
+    onTokenSelectionChange?: (selectedTokenIndices: number[]) => void;
 };
 
-function CodeBlock({ code, tokens, groupedTokenIndices, groupColors }: CodeBlockProps) {
+function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, onTokenSelectionChange }: CodeBlockProps) {
     const codeRef = useRef<HTMLPreElement>(null);
 
     useEffect(() => {
         if (codeRef.current) {
             generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices);
-            processCodeStyle(codeRef.current);
             processTokens(codeRef.current, groupColors);
+            processCodeStyle(codeRef.current, onTokenSelectionChange);
         }
     }, [code, groupColors, groupedTokenIndices, tokens]);
 
@@ -483,7 +495,7 @@ export function Feature() {
 
     // Navigation
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [selectedIndices, setSelectedIndices] = useState<string[]>([]);
+    const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
 
     // Labeling
     const [labels, setLabels] = useState<Label[]>([
@@ -512,7 +524,7 @@ export function Feature() {
             filteredValues.push(s);
         });
 
-        setSelectedIndices(filteredValues);
+        setSelectedSampleIndices(filteredValues);
     }, []);
 
     // Code Area
@@ -523,6 +535,7 @@ export function Feature() {
                 tokens={sample.tokens}
                 groupedTokenIndices={sample.groupedRanges.map((ranges) => convertPairedRangesToIndices(ranges))}
                 groupColors={labels.map((label) => label.color)}
+                onTokenSelectionChange={(selectedTokenIndices) => { console.log('Selected tokens: ', selectedTokenIndices); }}
             />
         );
     };
