@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
+import { range } from '@mantine/hooks';
 
 const demoFileServer = 'http://localhost:8080';
 const demoResultsDirectory = '/home/yuhuan/projects/cophi/vis-feat-proto/auto_labelling/';
@@ -17,26 +18,62 @@ const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
 type Sample = {
     text: string,
     tokens: string[],
-    groupedTokenIndices: number[][];
+    groupedRanges: number[][];
 }
 
 const commentSamples: Sample[] = [
     {
         text: comment_text,
         tokens: comment_tokens,
-        groupedTokenIndices: code_comment_labels.map((group) => group[0])
+        groupedRanges: code_comment_labels.map((group) => group[0])
     }
 ];
 const codeSamples: Sample[] = [
     {
         text: code_text,
         tokens: code_tokens,
-        groupedTokenIndices: code_comment_labels.map((group) => group[1])
+        groupedRanges: code_comment_labels.map((group) => group[1])
     }
 ];
 
+function convertPairedRangesToIndices(ranges: number[]) {
+    const indices = [];
+
+    for (let i = 0; i < range.length; ++i) {
+        if (i + 1 >= ranges.length) break;
+
+        for (let j = ranges[i]; j <= ranges[i + 1]; ++j) {
+            indices.push(j);
+        }
+    }
+
+    return indices;
+}
+
 function isSpecialToken(token: string) {
     return token.startsWith('<') && token.endsWith('>');
+}
+
+function removeDocstrings(code: string): string {
+    code = code.replace(/""".*?"""/gs, '');
+    code = code.replace(/'''.*?'''/gs, '');
+    return code;
+}
+
+function findCommentEnd(s: string, pos: number): number {
+    let i = pos;
+
+    while (i < s.length && /\s/.test(s[i])) {
+        i++;
+    }
+
+    if (s[i] === '#') {
+        while (i < s.length && s[i] !== '\n') {
+            i++;
+        }
+    }
+
+    return i;
 }
 
 function generateHighlightedCode(
@@ -45,14 +82,8 @@ function generateHighlightedCode(
     tokens: string[],
     groupedTokenIndices: number[][]
 ): HTMLElement {
-    // const highContrastColors = ["red", "blue", "green", "orange", "purple"];
-    // const colorMap: Record<number, string> = {};
-    // groupedTokenIndices.forEach((group, groupIndex) => {
-    //     const color = highContrastColors[groupIndex % highContrastColors.length];
-    //     group.forEach((index) => {
-    //         colorMap[index] = color;
-    //     });
-    // });
+    // FIXME this should add an option, because this simply removes docstring. Some user may choose not to remove
+    originalText = removeDocstrings(originalText);
 
     codeElement.innerHTML = "";
 
@@ -63,45 +94,55 @@ function generateHighlightedCode(
         });
     });
 
-    let tokenIndex = 0;
-    let buffer = "";
+    let pos = 0;
 
-    // FIXME iterate through/by char is relatively slow
-    for (let i = 0; i < originalText.length; i++) {
-        const char = originalText[i];
-
-        // skip special tokens
-        while (tokenIndex < tokens.length && isSpecialToken(tokens[tokenIndex])) {
-            tokenIndex++;
-
+    // flush next token, if tokenIndex < 0 only text is flushed
+    const flush = (nextPos: number, length: number, tokenIndex: number) => {
+        if (nextPos > pos) {
+            const text = originalText.slice(pos, nextPos);
+            codeElement.appendChild(document.createTextNode(text));
         }
+        pos = nextPos;
 
-        if (tokenIndex < tokens.length) {
-            const token = tokens[tokenIndex].replace("Ġ", "");
+        if (tokenIndex >= 0) {
+            const tokenInText = originalText.slice(pos, pos + length);
+            const span = document.createElement("span");
 
-            buffer += char;
-
-            if (buffer === token) {
-                const span = document.createElement("span");
-                span.classList.add(`label-${tokenIndex}`);
-                span.textContent = buffer;
-                codeElement.appendChild(span);
-
-                buffer = "";
-                tokenIndex++;
-            } else if (!token.startsWith(buffer)) {
-                const textNode = document.createTextNode(buffer[0]);
-                codeElement.appendChild(textNode);
-                buffer = buffer.slice(1);
+            const labelNumber = tokenToLabel.get(tokenIndex);
+            span.classList.add(`token-${tokenIndex}`);
+            if (labelNumber !== undefined) {
+                span.classList.add(`label-${labelNumber}`);
             }
-        } else {
-            codeElement.appendChild(document.createTextNode(char));
-        }
-    }
 
-    if (buffer) {
-        codeElement.appendChild(document.createTextNode(buffer));
-    }
+            span.textContent = tokenInText;
+            codeElement.appendChild(span);
+
+            pos += length;
+        }
+    };
+
+    // PITFALL: groupedTokenIndices is skipping special tokens
+    let indexForGroupTokens = 0;
+
+    tokens.forEach((token, i) => {
+        if (isSpecialToken(token)) return;
+
+        token = token.replace('\u0120', '');
+
+        // skip comments, to match tokens
+        // FIXME this should add an option, because this will also skip python comments in comment sample
+        const commentEnd = findCommentEnd(originalText, pos);
+
+        const nextPos = originalText.indexOf(token, commentEnd);
+        if (nextPos >= 0) {
+            flush(nextPos, token.length, indexForGroupTokens);
+        } else {
+            return;
+        }
+
+        indexForGroupTokens += 1;
+    });
+    flush(originalText.length, 0, -1);
 
     return codeElement;
 }
@@ -152,17 +193,11 @@ function expandSelectedRanges(selection: Selection, targetSpans: HTMLElement[]) 
     }
 }
 
-function processCode(code: HTMLElement) {
+function processCodeStyle(code: HTMLElement) {
     const targetSpans: HTMLElement[] = [];
 
     code.childNodes.forEach((node) => {
-        if (!(node instanceof HTMLElement)) {
-            const span = document.createElement('span');
-            span.textContent = node.textContent;
-            code.replaceChild(span, node);
-
-            targetSpans.push(span);
-        } else {
+        if (node instanceof HTMLSpanElement){
             targetSpans.push(node);
         }
     });
@@ -229,27 +264,70 @@ function processCode(code: HTMLElement) {
     };
 }
 
+const labelPrefix = 'label-';
+const getLabelNumber = (cls: string) => {
+    if (cls.startsWith(labelPrefix)) {
+        const labelNumber = parseInt(cls.slice(labelPrefix.length));
+        if (!isNaN(labelNumber)) {
+            return labelNumber;
+        }
+    }
+    return undefined;
+};
+const getLabelNumberOfElement = (element: HTMLElement) => {
+    for (const cls of element.classList) {
+        const labelNumber = getLabelNumber(cls);
+        if (labelNumber !== undefined) {
+            return labelNumber;
+        }
+    }
+    return undefined;
+};
+const getMantineColor = (colorLiteral: string) => {
+    return `var(--mantine-color-${colorLiteral}-filled)`;
+};
+function processTokens(code: HTMLElement, groupColors: string[]) {
+    const targetSpans: HTMLElement[] = [];
+
+    code.childNodes.forEach((node) => {
+        if (node instanceof HTMLSpanElement){
+            targetSpans.push(node);
+        }
+    });
+
+    targetSpans.forEach((span) => {
+        const labelNumber = getLabelNumberOfElement(span);
+        if (labelNumber !== undefined) {
+            span.style.color = getMantineColor(groupColors[labelNumber]);
+        }
+    });
+}
+
 type CodeBlockProps = {
     code: string;
     tokens: string[];
     groupedTokenIndices: number[][];
+    groupColors: string[];
 };
 
-function CodeBlock({ code, tokens, groupedTokenIndices }: CodeBlockProps) {
+function CodeBlock({ code, tokens, groupedTokenIndices, groupColors }: CodeBlockProps) {
     const codeRef = useRef<HTMLPreElement>(null);
 
     useEffect(() => {
         if (codeRef.current) {
             generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices);
-            processCode(codeRef.current);
+            processCodeStyle(codeRef.current);
+            processTokens(codeRef.current, groupColors);
         }
-    }, [code, groupedTokenIndices, tokens]);
+    }, [code, groupColors, groupedTokenIndices, tokens]);
 
     return (
         <pre className='target-code-pre'>
-            <code ref={codeRef}>
-                {code}
-            </code>
+            <ScrollArea w={400} h={300}>
+                <code ref={codeRef}>
+                    {code}
+                </code>
+            </ScrollArea>
         </pre>
     );
 }
@@ -382,6 +460,14 @@ function AlignmentLabels({ labels, setLabels } : AlignmentLabelsProps) {
     );
 };
 
+function generateColorForLabels() {
+
+}
+type Label = {
+    text: string;
+    color: string;
+}
+
 export function Feature() {
     // Options
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(false);
@@ -397,7 +483,7 @@ export function Feature() {
     const [selectedIndices, setSelectedIndices] = useState<string[]>([]);
 
     // Labeling
-    const [labels, setLabels] = useState([
+    const [labels, setLabels] = useState<Label[]>([
         { text: 'Label 1', color: 'blue' },
         { text: 'Label 2', color: 'green' },
     ]);
@@ -426,6 +512,18 @@ export function Feature() {
         setSelectedIndices(filteredValues);
     }, []);
 
+    // Code Area
+    const codeArea = (sample: Sample, labels: Label[]) => {
+        return (
+            <CodeBlock
+                code={sample.text}
+                tokens={sample.tokens}
+                groupedTokenIndices={sample.groupedRanges.map((ranges) => convertPairedRangesToIndices(ranges))}
+                groupColors={labels.map((label) => label.color)}
+            />
+        );
+    };
+
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
         classList.push('outline-tokens');
@@ -434,7 +532,7 @@ export function Feature() {
     const className = classList.join(' ');
 
     return (
-        <div className={className} style={{ width: '500px' }}>
+        <div className={className} style={{ width: '960px' }}>
             <TextInput
                 disabled={true}
                 value={optionLocalServer}
@@ -462,7 +560,7 @@ export function Feature() {
             <Center>
                 <NumberNavigationProps
                     value={currentIndex}
-                    total={sampleTokens.length}
+                    total={commentSamples.length}
                     onChangeValue={setCurrentIndex}
                 />
             </Center>
@@ -472,20 +570,17 @@ export function Feature() {
                     setLabels={setLabels}
                 />
             </Center>
-            <ScrollArea w='80%' style={{ margin: '0 auto' }}>
-                <CodeBlock
-                    code={commentSamples[currentIndex].text}
-                    tokens={commentSamples[currentIndex].tokens}
-                    groupedTokenIndices={commentSamples[currentIndex].groupedTokenIndices}
-                />
-            </ScrollArea>
-            <TagsInput
+            <Group gap='sm' justify='center'>
+                {codeArea(commentSamples[currentIndex], labels)}
+                {codeArea(codeSamples[currentIndex], labels)}
+            </Group>
+            {/* <TagsInput
                 value={selectedIndices}
                 onChange={searchSampleCallback}
                 label='Selected Samples'
                 clearable
             >
-            </TagsInput>
+            </TagsInput> */}
     </div>
   );
 }
