@@ -16,6 +16,11 @@ code {
   border-radius: 0.5em;
 }
 
+.outline-tokens .target-code-pre code {
+  min-width: 23.1em;
+  min-height: 5.1em;
+}
+
 .target-code-pre span::selection {
   color: unset;
   background-color: unset;
@@ -23,15 +28,9 @@ code {
 
 .target-code-pre span {
   border-radius: 0.6em;
-  padding: 2px 2px;
-  margin: 0 2px;
+  padding: 2px 0px;
 
   transition: background-color 0.1s ease-in-out;
-}
-
-.outline-tokens .target-code-pre code {
-  min-width: 23.1em;
-  min-height: 5.1em;
 }
 
 .outline-tokens .target-code-pre span {
