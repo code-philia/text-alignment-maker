@@ -56,3 +56,11 @@ code {
   background-color: transparent;
   opacity: 0.5;
 }
+
+.label-badge {
+  cursor: pointer;
+}
+
+.label-badge:hover {
+  opacity: 0.8;
+}

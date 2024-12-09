@@ -1,6 +1,6 @@
 import { Carousel } from '@mantine/carousel';
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput } from '@mantine/core';
-import { IconArrowRight, IconArrowLeft } from '@tabler/icons-react';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput } from '@mantine/core';
+import { IconArrowRight, IconArrowLeft, IconPlus } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-light.min.css';
@@ -60,9 +60,8 @@ function expandSelectedRanges(selection: Selection, targetSpans: HTMLElement[]) 
 }
 
 function processCode(code: HTMLElement) {
-    if (code.hasAttribute('data-highlighted')) return;
+    code.removeAttribute('data-highlighted');
 
-    console.log(`highlighting ${code.outerHTML}`);
     hljs.highlightElement(code);
 
     const targetSpans: HTMLElement[] = [];
@@ -174,6 +173,7 @@ function CodeBlock({ code }: CodeBlockProps) {
 
     useEffect(() => {
         if (codeRef.current) {
+            console.log(`code block is mounted again`);
             processCode(codeRef.current);
         }
     }, [code]);
@@ -221,9 +221,9 @@ function NumberNavigationProps({ value, total, onChangeValue }: NumberNavigation
                     className='number-navigation-button'
                     variant={ isSelected(i) ? 'filled' : 'transparent' }
                     color={ isSelected(i) ? 'blue' : 'gray' }
-                    onClick={() => onChangeValue(i)}
+                    onClick={() => onChangeValue(startIndex + i)}
                 >
-                    {i + 1}
+                    {startIndex + i + 1}
                 </Button>
             ))}
             <Button
@@ -239,33 +239,106 @@ function NumberNavigationProps({ value, total, onChangeValue }: NumberNavigation
     );
 }
 
-export function Feature() {
-    const codeCarouselRef = useRef<HTMLDivElement>(null);
+type AlignmentLabel = {
+    text: string;
+    color: string;
+};
 
+type AlignmentLabelsProps = {
+    labels: AlignmentLabel[];
+    setLabels: (labels: AlignmentLabel[]) => void;
+}
+
+function AlignmentLabels({ labels, setLabels } : AlignmentLabelsProps) {
+    const [newLabelText, setNewLabelText] = useState('');
+    const [newLabelColor, setNewLabelColor] = useState('#000000');
+    const [modalOpened, setModalOpened] = useState(false);
+
+    const addLabel = () => {
+        if (newLabelText.trim()) {
+            setLabels([...labels, { text: newLabelText, color: newLabelColor }]);
+            setNewLabelText('');
+            setNewLabelColor('#000000');
+            setModalOpened(false);
+        }
+    };
+
+    return (
+        <>
+            <div style={{ padding: '20px' }}>
+                <Group gap="sm">
+                    {labels.map((label, index) => (
+                        <Badge
+                            key={index}
+                            color={label.color}
+                            variant="filled"
+                            className='label-badge'
+                        >
+                            {label.text}
+                        </Badge>
+                    ))}
+                    <Badge
+                        leftSection={<IconPlus style={{ width: rem(12), height: rem(12) }} />}
+                        color='gray'
+                        className='label-badge add-label'
+                        onClick={() => setModalOpened(true)}
+                    >
+                        New
+                    </Badge>
+                </Group>
+
+            </div>
+            <Modal
+                opened={modalOpened}
+                onClose={() => setModalOpened(false)}
+                title="Add New Label"
+                size="sm" // Ensures the modal fits the screen better
+            >
+                <TextInput
+                    label="Label Text"
+                    placeholder="Enter label text"
+                    value={newLabelText}
+                    onChange={(event) => setNewLabelText(event.target.value)}
+                />
+                <ColorInput
+                    label="Label Color"
+                    placeholder="Pick a color"
+                    value={newLabelColor}
+                    onChange={(value) => setNewLabelColor(value)}
+                    style={{ marginTop: '15px' }}
+                />
+                <Group align="right" style={{ marginTop: '20px' }}>
+                    <Button onClick={addLabel}>Add</Button>
+                </Group>
+            </Modal>
+        </>
+    );
+};
+
+export function Feature() {
     // Options
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(false);
     const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
     const [optionLocalServer, setOptionLocalServer] = useState(demoFileServer);
 
     // Data
-    const [sampleTokens, setSampleTokens] = useState<string[][]>(Array(10).fill(0).map((_, i) => [(i + 1).toString()]));
+    const [sampleTokens, setSampleTokens] = useState<string[][]>(Array(30).fill(0).map((_, i) => [(i + 1).toString()]));
     const [sampleLabelling, setSampleLabelling] = useState<string[]>([]);
 
     // Navigation
-    const [currentIndex, setCurrentIndex] = useState(1);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [selectedIndices, setSelectedIndices] = useState<string[]>([]);
+
+    // Labeling
+    const [labels, setLabels] = useState([
+        { text: 'Label 1', color: 'blue' },
+        { text: 'Label 2', color: 'green' },
+    ]);
 
     const samples = [
         'The Python \nLanguage',
         // lorem
     ];
-    const slides = samples.map((sample, i) =>
-        <Carousel.Slide key={i}>
-            <ScrollArea w='80%' style={{ margin: '0 auto' }}>
-                <CodeBlock code={sample} />
-            </ScrollArea>
-        </Carousel.Slide>
-    );
 
     const loadFileCallback = useCallback(() => {
         fetch(`${optionLocalServer}${demoLabelingFilePath}`)
@@ -331,7 +404,15 @@ export function Feature() {
                     onChangeValue={setCurrentIndex}
                 />
             </Center>
-            <Space h='sm'></Space>
+            <Center>
+                <AlignmentLabels
+                    labels={labels}
+                    setLabels={setLabels}
+                />
+            </Center>
+            <ScrollArea w='80%' style={{ margin: '0 auto' }}>
+                <CodeBlock code={samples[currentIndex]} />
+            </ScrollArea>
             <TagsInput
                 value={selectedIndices}
                 onChange={searchSampleCallback}
@@ -339,17 +420,6 @@ export function Feature() {
                 clearable
             >
             </TagsInput>
-        <Carousel
-                ref={codeCarouselRef}
-                nextControlIcon={<IconArrowRight style={{ width: rem(16), height: rem(16) }} />}
-                previousControlIcon={<IconArrowLeft style={{ width: rem(16), height: rem(16) }} />}
-                slideGap='sm'
-                controlsOffset='xs'
-                draggable={false}
-                speed={10000}
-            >
-                {slides}
-            </Carousel>
     </div>
   );
 }

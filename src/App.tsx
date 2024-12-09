@@ -2,7 +2,7 @@ import '@mantine/core/styles.css';
 import '@mantine/carousel/styles.css';
 import './App.css';
 
-import { createTheme, MantineProvider } from '@mantine/core';
+import { Center, createTheme, MantineProvider } from '@mantine/core';
 import { Feature } from './components/feature';
 
 const theme = createTheme({
@@ -11,8 +11,10 @@ const theme = createTheme({
 
 function App() {
   return (
-    <MantineProvider theme={theme}>
-      <Feature />
+      <MantineProvider theme={theme}>
+          <Center>
+            <Feature />
+          </Center>
     </MantineProvider>
   );
 }
