@@ -1,8 +1,6 @@
-import { Carousel } from '@mantine/carousel';
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor } from '@mantine/core';
 import { IconArrowRight, IconArrowLeft, IconPlus } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
 import { range } from '@mantine/hooks';
@@ -475,9 +473,17 @@ function AlignmentLabels({ labels, setLabels } : AlignmentLabelsProps) {
     );
 };
 
-function generateColorForLabels() {
+function generateColorForLabels(num: number) {
+    const standardColors: MantineColor[] = ['blue', 'green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
+    const colors: MantineColor[] = [];
 
+    for (let i = 0; i < num; i++) {
+        colors.push(standardColors[i % standardColors.length]);
+    }
+
+    return colors;
 }
+
 type Label = {
     text: string;
     color: string;
@@ -490,18 +496,15 @@ export function Feature() {
     const [optionLocalServer, setOptionLocalServer] = useState(demoFileServer);
 
     // Data
-    const [sampleTokens, setSampleTokens] = useState<string[][]>(Array(30).fill(0).map((_, i) => [(i + 1).toString()]));
-    const [sampleLabelling, setSampleLabelling] = useState<string[]>([]);
+    // const [sampleTokens, setSampleTokens] = useState<string[][]>(Array(30).fill(0).map((_, i) => [(i + 1).toString()]));
+    // const [sampleLabelling, setSampleLabelling] = useState<string[]>([]);
 
     // Navigation
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
+    // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
 
     // Labeling
-    const [labels, setLabels] = useState<Label[]>([
-        { text: 'Label 1', color: 'blue' },
-        { text: 'Label 2', color: 'green' },
-    ]);
+    const [labels, setLabels] = useState<Label[]>([]);
 
     const loadFileCallback = useCallback(() => {
         fetch(`${optionLocalServer}${demoLabelingFilePath}`)
@@ -514,18 +517,18 @@ export function Feature() {
             });
     }, [optionLocalServer]);
 
-    const searchSampleCallback = useCallback((values: string[]) => {
-        const filteredValues: string[] = [];
+    // const searchSampleCallback = useCallback((values: string[]) => {
+    //     const filteredValues: string[] = [];
 
-        values.forEach((s) => {
-            if (isNaN(parseInt(s)) || parseInt(s) < 1 || parseInt(s) > commentSamples.length) {
-                return;
-            }
-            filteredValues.push(s);
-        });
+    //     values.forEach((s) => {
+    //         if (isNaN(parseInt(s)) || parseInt(s) < 1 || parseInt(s) > commentSamples.length) {
+    //             return;
+    //         }
+    //         filteredValues.push(s);
+    //     });
 
-        setSelectedSampleIndices(filteredValues);
-    }, []);
+    //     setSelectedSampleIndices(filteredValues);
+    // }, []);
 
     // Code Area
     const codeArea = (sample: Sample, labels: Label[]) => {
