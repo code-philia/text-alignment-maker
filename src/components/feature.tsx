@@ -1,6 +1,6 @@
 import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor } from '@mantine/core';
 import { IconArrowRight, IconArrowLeft, IconPlus } from '@tabler/icons-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
 
@@ -13,23 +13,23 @@ const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
 // const lorem = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
 
 type Sample = {
+    index: number,
     text: string,
     tokens: string[],
-    labelingRanges: number[][];
 }
 
-const commentSamples: Sample[] = [
+const demoCommentSamples: Sample[] = [
     {
+        index: 3864,
         text: comment_text,
         tokens: comment_tokens,
-        labelingRanges: code_comment_labels.map((group) => group[0])
     }
 ];
-const codeSamples: Sample[] = [
+const demoCodeSamples: Sample[] = [
     {
+        index: 3864,
         text: code_text,
         tokens: code_tokens,
-        labelingRanges: code_comment_labels.map((group) => group[1])
     }
 ];
 
@@ -94,22 +94,23 @@ function indicesToMatch(indices: number[][][]): number[][][] {
 
 const commentGroup = 0;
 const codeGroup = 1;
+
+type LabelingProviderOptions = {
+    content?: string,
+    onSave?: (dumped: string) => void
+};
 class LabelingProvider {
     // suppose the first group is comment and the second group is code
     private indicesOfEachSampleByLabelByGroup: Map<number, number[][][]> = new Map();
     private onSave?: (dumped: string) => void;
 
-    constructor(content: string, onSave?: (dumped: string) => void) {
-        const lines = content.split('\n');
-        lines.forEach((line) => {
-            const parsed = this.parseSample(line);
-            if (parsed) {
-                const [idx, ranges] = parsed;
-                this.indicesOfEachSampleByLabelByGroup.set(idx, ranges);
-            }
-        });
-
-        this.onSave = onSave;
+    constructor({ content, onSave }: LabelingProviderOptions) {
+        if (content) {
+            this.load(content);
+        }
+        if (onSave) {
+            this.onSave = onSave;
+        }
     }
 
     private parseSample(line: string): [number, number[][][]] | undefined {
@@ -141,8 +142,12 @@ class LabelingProvider {
         return this.indicesOfEachSampleByLabelByGroup.get(sample)?.length ?? 0;
     }
 
-    getTokensOnLabel(sample: number, group: number, label: number) {
+    getTokensOnGroupOnLabel(sample: number, group: number, label: number) {
         return this.indicesOfEachSampleByLabelByGroup.get(sample)?.[label]?.[group];
+    }
+
+    getTokensOnGroup(sample: number, group: number) {
+        return this.indicesOfEachSampleByLabelByGroup.get(sample)?.map((label) => label[group]);
     }
 
     addTokensOnLabel(sample: number, group: number, label: number, tokens: number[]) {
@@ -189,15 +194,26 @@ class LabelingProvider {
         indicesOfSampleByLabelByGroup.push(...newIndices);
     }
 
+    // TODO A question, using sample as number? Should be sampleIndex? :)
     removeTokensFromAllLabels(sample: number, group: number, tokens: number[]) {
         for (let i = 0; i < this.getNumOfLabels(sample); ++i) {
             this.removeTokensOnLabel(sample, group, i, tokens);
         }
     }
 
-    // load() {
+    load(content: string) {
+        const lines = content.split('\n');
+        lines.forEach((line) => {
+            line = line.trim();
+            if (line.length === 0) return;
 
-    // }
+            const parsed = this.parseSample(line);
+            if (parsed) {
+                const [idx, ranges] = parsed;
+                this.indicesOfEachSampleByLabelByGroup.set(idx, ranges);
+            }
+        });
+    }
 
     save() {
         if (this.onSave) {
@@ -209,6 +225,28 @@ class LabelingProvider {
         }
     }
 }
+
+type ILabelingLoadAction = {
+    type: 'load',
+    content: string
+};
+type ILabelingSaveAction = {
+    type: 'save'
+};
+type ILabelingRemoveAction = {
+    type: 'removeAllLabels'
+    sample: number,
+    group: number,
+    tokens: number[]
+};
+type ILabelingAddAction = {
+    type: 'addToLabel',
+    sample: number,
+    group: number,
+    label: number,
+    tokens: number[]
+};
+type ILabelingAction = ILabelingLoadAction | ILabelingSaveAction | ILabelingRemoveAction | ILabelingAddAction;
 
 function isSpecialToken(token: string) {
     return token.startsWith('<') && token.endsWith('>');
@@ -494,7 +532,7 @@ function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, onTokenSele
             processTokens(codeRef.current, groupColors);
             processCodeStyle(codeRef.current, onTokenSelectionChange);
         }
-    }, [code, groupColors, groupedTokenIndices, tokens]);
+    }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);
 
     return (
         <pre className='target-code-pre'>
@@ -667,13 +705,37 @@ export function Feature() {
     const [optionLocalServer, setOptionLocalServer] = useState(demoFileServer);
 
     // Data
-    // const [sampleTokens, setSampleTokens] = useState<string[][]>(Array(30).fill(0).map((_, i) => [(i + 1).toString()]));
-    // const [sampleLabelling, setSampleLabelling] = useState<string[]>([]);
-    const labelingProvider = useRef<LabelingProvider>(new LabelingProvider('', (dumped) => {
-        setDumpedString(dumped);
-        setModalOpened(true);
-        console.log(dumped);
-    }));
+    const [codeSamples, setCodeSamples] = useState<Sample[]>(demoCodeSamples);
+    const [commentSamples, setCommentSamples] = useState<Sample[]>(demoCommentSamples);
+
+    const [labelingProvider, dispatchLabelingProvider] = useReducer(
+        (state: LabelingProvider, action: ILabelingAction) => {
+            switch (action.type) {
+                case 'load':
+                    state.load(action.content);
+                    return state;
+                case 'save':
+                    state.save();
+                    return state;
+                case 'removeAllLabels':
+                    state.removeTokensFromAllLabels(action.sample, action.group, action.tokens);
+                    return state;
+                case 'addToLabel':
+                    state.addTokensOnLabel(action.sample, action.group, action.label, action.tokens);
+                    return state;
+                default:
+                    return state;
+            }
+        },
+        new LabelingProvider({
+            content: '',
+            onSave: (dumped) => {
+                setDumpedString(dumped);
+                setModalOpened(true);
+                console.log(dumped);
+            }
+        })
+    );
 
     // Data Saving
     const [dumpedString, setDumpedString] = useState('');
@@ -688,72 +750,91 @@ export function Feature() {
     const [selectedCodeTokens, setSelectedCodeTokens] = useState<number[]>([]);
     const [selectedCommentTokens, setSelectedCommentTokens] = useState<number[]>([]);
 
-    const setLabelofTokens = (group: number, label: number, tokens: number[]) => {
+    const setLabelOfTokens = (group: number, label: number, tokens: number[]) => {
         if (label < 0) {
-            labelingProvider.current.removeTokensFromAllLabels(currentSampleIndex, group, tokens);
+            dispatchLabelingProvider({
+                type: 'removeAllLabels',
+                sample: currentSampleIndex,
+                group,
+                tokens
+            });
         } else {
-            labelingProvider.current.addTokensOnLabel(currentSampleIndex, group, label, tokens);
+            dispatchLabelingProvider({
+                type: 'addToLabel',
+                sample: currentSampleIndex,
+                group,
+                label,
+                tokens
+            });
         }
     };
 
     const clickLabelCallback = (labelIndex: number) => {
         if (selectedCodeTokens.length > 0) {
-            setLabelofTokens(codeGroup, labelIndex, selectedCodeTokens);
+            setLabelOfTokens(codeGroup, labelIndex, selectedCodeTokens);
         }
         if (selectedCommentTokens.length > 0) {
-            setLabelofTokens(commentGroup, labelIndex, selectedCommentTokens);
+            setLabelOfTokens(commentGroup, labelIndex, selectedCommentTokens);
         }
     };
 
     // A test function of fetch
     const loadFileCallback = useCallback(() => {
-        fetch(`${optionLocalServer}${demoLabelingFilePath}`)
-            .then((response) => response.text())
+        fetch(`${optionLocalServer}${demoResultsDirectory}${demoLabelingFilePath}`)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Cannot fetch labeling file');
+                }
+
+                return response.text();
+            })
             .then((data) => {
-                console.log(data);
+                dispatchLabelingProvider({ type: 'load', content: data });
             })
             .catch((error) => {
                 console.error('Cannot get json:', error);
             });
     }, [optionLocalServer]);
 
-    // const searchSampleCallback = useCallback((values: string[]) => {
-    //     const filteredValues: string[] = [];
-
-    //     values.forEach((s) => {
-    //         if (isNaN(parseInt(s)) || parseInt(s) < 1 || parseInt(s) > commentSamples.length) {
-    //             return;
-    //         }
-    //         filteredValues.push(s);
-    //     });
-
-    //     setSelectedSampleIndices(filteredValues);
-    // }, []);
-
     // Code Area
-    const codeArea = (sample: Sample, labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
+    const codeArea = (sample: Sample, labelingRanges: number[][], labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
         return (
             <CodeBlock
                 code={sample.text}
                 tokens={sample.tokens}
-                groupedTokenIndices={sample.labelingRanges.map((ranges) => new Ranges(ranges).expand())}
+                groupedTokenIndices={labelingRanges}
                 groupColors={labels.map((label) => label.color)}
                 onTokenSelectionChange={onTokenSelectionChange}
             />
         );
     };
 
+    const codeAreaForComment = useMemo(() => {
+        return codeArea(
+            commentSamples[currentSampleIndex],
+            labelingProvider.getTokensOnGroup(codeSamples[currentSampleIndex].index, commentGroup) ?? [],
+            labels,
+            setSelectedCommentTokens
+        );
+    }, [codeSamples, commentSamples, currentSampleIndex, labelingProvider, labels]);
+
+    const codeAreaForCode = useMemo(() => {
+        return codeArea(
+            codeSamples[currentSampleIndex],
+            labelingProvider.getTokensOnGroup(codeSamples[currentSampleIndex].index, codeGroup) ?? [],
+            labels,
+            setSelectedCodeTokens
+        );
+    }, [codeSamples, currentSampleIndex, labelingProvider, labels]);
+
     // Data Loading
     useEffect(() => {
         // Set up labels and colors
-        const numOfLabels = Math.max(
-            commentSamples[currentSampleIndex].labelingRanges.length,
-            codeSamples[currentSampleIndex].labelingRanges.length
-        );
+        const numOfLabels = labelingProvider.getNumOfLabels(currentSampleIndex);
         const defaultGeneratedColors = generateColorForLabels(numOfLabels);
 
         setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
-    }, [currentSampleIndex]);
+    }, [currentSampleIndex, labelingProvider]);
 
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
@@ -791,7 +872,7 @@ export function Feature() {
             <Center>
                 <NumberNavigationProps
                     value={currentSampleIndex}
-                    total={commentSamples.length}
+                    total={demoCommentSamples.length}
                     onChangeValue={setCurrentSampleIndex}
                 />
             </Center>
@@ -803,8 +884,8 @@ export function Feature() {
                 />
             </Center>
             <Group gap='sm' justify='center'>
-                {codeArea(commentSamples[currentSampleIndex], labels, setSelectedCommentTokens)}
-                {codeArea(codeSamples[currentSampleIndex], labels, setSelectedCodeTokens)}
+                {codeAreaForComment}
+                {codeAreaForCode}
             </Group>
             {/* <TagsInput
                 value={selectedIndices}
