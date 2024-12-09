@@ -43,19 +43,24 @@
 }
 
 .target-code-pre {
-    text-wrap: wrap;
-    padding: 1em;
-    background-color: rgba(0, 0, 0, 0.05);
-    border-radius: 0.5em;
+  text-wrap: wrap;
+  padding: 1em;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 0.5em;
+}
+
+.target-code-pre span::selection {
+  color: unset;
+  background-color: unset;
 }
 
 .target-code-pre span {
-    user-select: none;
+  border-radius: 0.6em;
+  padding: 2px 2px;
+  margin: 0 2px;
+  background-color: rgba(173, 216, 230, 0.3);
 }
 
 .target-code-pre span.selected {
-    background-color: lightblue; 
-    border-radius: 2px;
-    padding: 2px 0;
-    margin: 0 2px;
+  background-color: rgba(173, 216, 230, 1.0);
 }

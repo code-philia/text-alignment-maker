@@ -1,5 +1,5 @@
 import { Carousel } from '@mantine/carousel';
-import { Button, Flex, rem, ScrollArea, Space, TextInput } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox } from '@mantine/core';
 import { IconArrowRight, IconArrowLeft } from '@tabler/icons-react';
 import { useEffect, useRef } from 'react';
 import hljs from 'highlight.js';
@@ -60,6 +60,58 @@ function processCode(codeWrapper: HTMLElement) {
     //         }
     //     });
     // });
+
+    document.addEventListener('selectionchange', () => {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const startContainer = range.startContainer;
+            const endContainer = range.endContainer;
+
+            console.log(startContainer, endContainer);
+
+            const startSpan = targetSpans.find((span) => span.contains(startContainer));
+            const endSpan = targetSpans.find((span) => span.contains(endContainer));
+            if (startSpan && endSpan && focused) {
+                const _startIndex = targetSpans.indexOf(startSpan);
+                const startIndex = _startIndex < 0 ? 0 : _startIndex;
+                const endIndex = targetSpans.indexOf(endSpan);
+
+                console.log(`selected range: ${startIndex} - ${endIndex}`);
+
+                targetSpans.forEach((span, i) => {
+                    if (i >= startIndex && i <= endIndex) {
+                        span.classList.add('selected');
+                    } else {
+                        span.classList.remove('selected');
+                    }
+                });
+            } else {
+                targetSpans.forEach((span) => {
+                    span.classList.remove('selected');
+                });
+            }
+        }
+    });
+
+    let focused = false;
+
+    window.addEventListener('mousedown', (e: MouseEvent) => {
+        if (!(e.target instanceof Node
+            && targetSpans.some((span) => span.contains(e.target as Node)))
+        ){
+            focused = false;
+            targetSpans.forEach((span) => {
+                span.classList.remove('selected');
+            });
+        }
+    });
+
+    targetSpans.forEach((span) => {
+        span.addEventListener('mousedown', () => {
+            focused = true;
+        });
+    });
 }
 
 type CodeBlockProps = {
@@ -108,6 +160,9 @@ export function Feature() {
                 <Button>Load</Button>
             </Flex>
             <Space h='sm'></Space>
+            <Group>
+                <Checkbox label='Outline Tokens' />
+            </Group>
             <Carousel
                 ref={codeCarouselRef}
                 nextControlIcon={<IconArrowRight style={{ width: rem(16), height: rem(16) }} />}
