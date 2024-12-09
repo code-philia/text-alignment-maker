@@ -543,6 +543,18 @@ export function Feature() {
         );
     };
 
+    // Data Loading
+    useEffect(() => {
+        // Set up labels and colors
+        const numOfLabels = Math.max(
+            commentSamples[currentIndex].groupedRanges.length,
+            codeSamples[currentIndex].groupedRanges.length
+        );
+        const defaultGeneratedColors = generateColorForLabels(numOfLabels);
+
+        setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
+    }, [currentIndex]);
+
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
         classList.push('outline-tokens');
