@@ -29,10 +29,30 @@ code {
   transition: background-color 0.1s ease-in-out;
 }
 
+.outline-tokens .target-code-pre code {
+  min-width: 23.1em;
+  min-height: 5.1em;
+}
+
 .outline-tokens .target-code-pre span {
-  background-color: rgba(173, 216, 230, 0.3);
+  background-color: rgba(173, 216, 230, 0.2);
+}
+
+.target-code-pre span:hover {
+  background-color: rgba(173, 216, 230, 0.5);
 }
 
 .target-code-pre span.selected {
   background-color: rgba(173, 216, 230, 1.0);
+}
+
+.number-navigation-button {
+  width: 2em;
+  height: 2em;
+  padding: 0.3em;
+}
+
+.number-navigation-button:disabled {
+  background-color: transparent;
+  opacity: 0.5;
 }

@@ -1,9 +1,15 @@
 import { Carousel } from '@mantine/carousel';
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput } from '@mantine/core';
 import { IconArrowRight, IconArrowLeft } from '@tabler/icons-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-light.min.css';
+
+const demoFileServer = 'http://localhost:8080';
+const demoResultsDirectory = '/home/yuhuan/projects/cophi/vis-feat-proto/auto_labelling/';
+const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.json';
+const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.json';
+const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
 
 // const lorem = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
 
@@ -163,7 +169,7 @@ type CodeBlockProps = {
     code: string;
 };
 
-export function CodeBlock({ code }: CodeBlockProps) {
+function CodeBlock({ code }: CodeBlockProps) {
     const codeRef = useRef<HTMLPreElement>(null);
 
     useEffect(() => {
@@ -181,10 +187,73 @@ export function CodeBlock({ code }: CodeBlockProps) {
     );
 }
 
+type NumberNavigationProps = {
+    value: number;
+    total: number;
+    onChangeValue: (i: number) => void;
+}
+
+function NumberNavigationProps({ value, total, onChangeValue }: NumberNavigationProps) {
+    const numOfOptions = 10;
+
+    const startIndex = Math.floor(value / numOfOptions) * numOfOptions;
+    const endIndex = Math.min(startIndex + numOfOptions, total);
+
+    const isFirst = value == 0;
+    const isLast = value == total - 1;
+
+    const isSelected = (i: number) => value % 10 === i;
+
+    return (
+        <Group gap='3'>
+            <Button
+                className='number-navigation-button'
+                variant='transparent'
+                color='gray'
+                disabled={isFirst}
+                onClick={() => onChangeValue(value - 1)}
+            >
+                <IconArrowLeft />
+            </Button>
+            {new Array(endIndex - startIndex).fill(0).map((_, i) => (
+                <Button
+                    key={i + 1}
+                    className='number-navigation-button'
+                    variant={ isSelected(i) ? 'filled' : 'transparent' }
+                    color={ isSelected(i) ? 'blue' : 'gray' }
+                    onClick={() => onChangeValue(i)}
+                >
+                    {i + 1}
+                </Button>
+            ))}
+            <Button
+                className='number-navigation-button'
+                variant='transparent'
+                color='gray'
+                disabled={isLast}
+                onClick={() => onChangeValue(value + 1)}
+            >
+                <IconArrowRight />
+            </Button>
+        </Group>
+    );
+}
+
 export function Feature() {
     const codeCarouselRef = useRef<HTMLDivElement>(null);
 
+    // Options
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(false);
+    const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
+    const [optionLocalServer, setOptionLocalServer] = useState(demoFileServer);
+
+    // Data
+    const [sampleTokens, setSampleTokens] = useState<string[][]>(Array(10).fill(0).map((_, i) => [(i + 1).toString()]));
+    const [sampleLabelling, setSampleLabelling] = useState<string[]>([]);
+
+    // Navigation
+    const [currentIndex, setCurrentIndex] = useState(1);
+    const [selectedIndices, setSelectedIndices] = useState<string[]>([]);
 
     const samples = [
         'The Python \nLanguage',
@@ -198,6 +267,30 @@ export function Feature() {
         </Carousel.Slide>
     );
 
+    const loadFileCallback = useCallback(() => {
+        fetch(`${optionLocalServer}${demoLabelingFilePath}`)
+            .then((response) => response.text())
+            .then((data) => {
+                console.log(data);
+            })
+            .catch((error) => {
+                console.error('Cannot get json:', error);
+            });
+    }, [optionLocalServer]);
+
+    const searchSampleCallback = useCallback((values: string[]) => {
+        const filteredValues: string[] = [];
+
+        values.forEach((s) => {
+            if (isNaN(parseInt(s)) || parseInt(s) < 1 || parseInt(s) > samples.length) {
+                return;
+            }
+            filteredValues.push(s);
+        });
+
+        setSelectedIndices(filteredValues);
+    }, [samples.length]);
+
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
         classList.push('outline-tokens');
@@ -207,11 +300,21 @@ export function Feature() {
 
     return (
         <div className={className} style={{ width: '500px' }}>
-            <TextInput label='Tokens directory' description='Directory that contains tokens of samples' />
+            <TextInput
+                disabled={true}
+                value={optionLocalServer}
+                label='File Server'
+                description='Local server providing access to file' />
             <Flex align='flex-end'>
-                <TextInput label='Results file' description='Labeling results file (.jsonl) of samples' style={{ flexGrow: '1' }} />
+                <TextInput
+                    disabled={true}
+                    value={demoResultsDirectory}
+                    label='Tokens directory'
+                    description='Directory that contains tokens of samples'
+                    style={{ flexGrow: 1 }}
+                />
                 <Space w='sm'></Space>
-                <Button>Load</Button>
+                <Button onClick={loadFileCallback}>Load</Button>
             </Flex>
             <Space h='sm'></Space>
             <Group>
@@ -220,7 +323,23 @@ export function Feature() {
                     onChange={(event) => setOptionOutlineTokens(event.currentTarget.checked)}
                     label='Outline Tokens' />
             </Group>
-            <Carousel
+            <Space h='md'></Space>
+            <Center>
+                <NumberNavigationProps
+                    value={currentIndex}
+                    total={sampleTokens.length}
+                    onChangeValue={setCurrentIndex}
+                />
+            </Center>
+            <Space h='sm'></Space>
+            <TagsInput
+                value={selectedIndices}
+                onChange={searchSampleCallback}
+                label='Selected Samples'
+                clearable
+            >
+            </TagsInput>
+        <Carousel
                 ref={codeCarouselRef}
                 nextControlIcon={<IconArrowRight style={{ width: rem(16), height: rem(16) }} />}
                 previousControlIcon={<IconArrowLeft style={{ width: rem(16), height: rem(16) }} />}
