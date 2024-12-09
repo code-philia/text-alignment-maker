@@ -152,23 +152,26 @@ function mouseEventLiesIn(e: MouseEvent, ...targetSpans: HTMLElement[]) {
         && targetSpans.some((span) => span.contains(e.target as Node));
 }
 
-function getSelectedElements(selection: Selection, targetSpans: HTMLElement[]) {
-    const selectedElements: HTMLElement[] = [];
+function getSelectedNodes(selection: Selection, targetNodes: Node[]) {
+    const selectedElements: Node[] = [];
 
     for (let i = 0; i < selection.rangeCount; i++) {
         const range = selection.getRangeAt(i);
         const startContainer = range.startContainer;
         const endContainer = range.endContainer;
 
-        const startSpan = targetSpans.find((span) => span.contains(startContainer));
-        const endSpan = targetSpans.find((span) => span.contains(endContainer));
-        if (startSpan && endSpan) {
-            const _startIndex = targetSpans.indexOf(startSpan);
-            const startIndex = _startIndex < 0 ? 0 : _startIndex;
-            const endIndex = targetSpans.indexOf(endSpan);
+        const startSpan = targetNodes.find((span) => span.contains(startContainer));
+        const endSpan = targetNodes.find((span) => span.contains(endContainer));
 
-            selectedElements.push(...targetSpans.slice(startIndex, endIndex + 1));  // even if endIndex === -1 this works
-        }
+        if (!(startSpan || endSpan)) return;
+
+        const _startIndex = (startSpan && targetNodes.indexOf(startSpan)) ?? 0;
+        const startIndex = _startIndex < 0 ? 0 : _startIndex;                   // If startSpan is not found? Will that happen?
+
+        const _endIndex = (endSpan && targetNodes.indexOf(endSpan)) ?? targetNodes.length - 1;
+        const endIndex = _endIndex < 0 ? targetNodes.length - 1 : _endIndex;    // If endSpan is not found? Will that happen?
+
+        selectedElements.push(...targetNodes.slice(startIndex, endIndex + 1));
     }
 
     return selectedElements;
@@ -213,7 +216,7 @@ function processCodeStyle(code: HTMLElement) {
 
         const selection = window.getSelection();
         if (focused && selection && selection.rangeCount > 0) {
-            const selectedElements = new Set(getSelectedElements(selection, targetSpans));
+            const selectedElements = new Set(getSelectedNodes(selection, Array.from(code.childNodes)));
             targetSpans.forEach((span) => {
                 if (selectedElements.has(span)) {
                     span.classList.add('selected');
