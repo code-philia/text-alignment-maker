@@ -885,7 +885,6 @@ export function Feature() {
             onSave: (dumped) => {
                 setDumpedString(dumped);
                 setModalOpened(true);
-                console.log(dumped);
             }
         })
     );
@@ -1079,7 +1078,6 @@ export function Feature() {
                 groupedTokenIndices={labelingRanges}
                 groupColors={labels.map((label) => label.color)}
                 onTokenSelectionChange={(s: number[]) => {
-                    console.log(`selection changed to ${s}`);
                     onTokenSelectionChange?.(s);
                 }}
             />
