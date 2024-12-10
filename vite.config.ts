@@ -13,7 +13,7 @@ export default defineConfig({
                 // Serve a folder named "mock-folder" at `/mock`
                 server.middlewares.use(
                     '/mock',
-                    serveStatic(path.resolve(__dirname, '../auto_labelling'))
+                    serveStatic('/')
                 );
             }
         }

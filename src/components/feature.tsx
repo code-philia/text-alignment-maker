@@ -1,5 +1,5 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor } from '@mantine/core';
-import { IconArrowRight, IconArrowLeft, IconPlus } from '@tabler/icons-react';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor, HoverCard, Text, List, Loader } from '@mantine/core';
+import { IconArrowRight, IconArrowLeft, IconPlus, IconInfoCircle } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
@@ -578,13 +578,19 @@ type NumberNavigationProps = {
 function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigationProps) {
     const numOfOptions = 10;
 
-    const startIndex = Math.floor(value / numOfOptions) * numOfOptions;
+    const page = Math.floor(value / numOfOptions);
+    const totalPages = Math.ceil(total / numOfOptions);
+
+    const startIndex = page * numOfOptions;
     const endIndex = Math.min(startIndex + numOfOptions, total);
 
-    const isFirst = value == 0;
-    const isLast = value == total - 1;
+    const isFirstPage = page == 0;
+    const isLastPage = page == totalPages - 1;
 
     const isSelected = (i: number) => value % 10 === i;
+
+    const prevPageValue = Math.max(value - numOfOptions, 0);
+    const nextPageValue = Math.min(value + numOfOptions, total - 1);
 
     return (
         <Group gap='3'>
@@ -592,8 +598,8 @@ function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigatio
                 className='number-navigation-button'
                 variant='transparent'
                 color='gray'
-                disabled={isFirst}
-                onClick={() => onChangeValue(value - 1)}
+                disabled={isFirstPage}
+                onClick={() => onChangeValue(prevPageValue)}
             >
                 <IconArrowLeft />
             </Button>
@@ -612,8 +618,8 @@ function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigatio
                 className='number-navigation-button'
                 variant='transparent'
                 color='gray'
-                disabled={isLast}
-                onClick={() => onChangeValue(value + 1)}
+                disabled={isLastPage}
+                onClick={() => onChangeValue(nextPageValue)}
             >
                 <IconArrowRight />
             </Button>
@@ -744,8 +750,9 @@ function setLabelOfTokens(sampleIndex: number, group: number, label: number, tok
     ]);
 };
 
-function fetchResponse(fileName: string) {
-    return fetch(`/mock/${fileName}`)
+function fetchResponse(dirAbsPath: string, fileName: string) {
+    const path = dirAbsPath.endsWith('/') ? dirAbsPath.slice(0, -1) : dirAbsPath;
+    return fetch(`/mock${path}/${fileName}`)
         .then((response) => {
             if (!response.ok) {
                 throw new Error('Cannot fetch file: ' + fileName);
@@ -851,6 +858,9 @@ export function Feature() {
     const [dumpedString, setDumpedString] = useState('');
     const [modalOpened, setModalOpened] = useState(false);
 
+    // Loading
+    const [loaderOpened, setLoaderOpened] = useState(false);
+
     // Navigation
     const [currentLabelingResultIndex, setCurrentSampleIndex] = useState(0);     // !! THIS IS the index from all labeling results !!
     // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
@@ -925,8 +935,11 @@ export function Feature() {
 
     const loadFileCallback = useCallback(() => {
         // TODO optimization, don't load full/all samples into memory
+        setLoaderOpened(true);
         (async () => {
-            const labelingData = await fetch(`/mock/${demoLabelingFilePath}`)
+
+            const path = optionTokensDirectory.endsWith('/') ? optionTokensDirectory.slice(0, -1) : optionTokensDirectory;
+            const labelingData = await fetch(`/mock${path}/${demoLabelingFilePath}`)
                 .then((response) => {
                     if (!response.ok) {
                         throw new Error('Cannot fetch labeling file');
@@ -947,13 +960,13 @@ export function Feature() {
 
             // FIXME too long nested, too many parenthesis
             if (labelingData !== undefined) {
-                fetchResponse(demoTrainDataFile)
+                fetchResponse(optionTokensDirectory, demoTrainDataFile)
                     .then(readJsonLinesToList)
                     .then(jsonList => {
                         if (jsonList === undefined) return;
                         const data = jsonList.map((line) => JSON.parse(line.trim()));
 
-                        fetchResponse(demoCompleteCodeTokensFile)
+                        const loadCode = fetchResponse(optionTokensDirectory, demoCompleteCodeTokensFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -970,7 +983,7 @@ export function Feature() {
                                     };
                                 }));
                             });
-                        fetchResponse(demoCompleteCommentTokensFile)
+                        const loadComment = fetchResponse(optionTokensDirectory, demoCompleteCommentTokensFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -987,11 +1000,14 @@ export function Feature() {
                                     };
                                 }));
                             });
+                        Promise.race([loadCode, loadComment]).then(() => {
+                            setLoaderOpened(false);
+                        });
                     });
             }
         })();
 
-    }, [labelingProvider, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
+    }, [labelingProvider, optionTokensDirectory, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
 
     // Code Area
     const codeArea = (sample: Sample, labelingRanges: number[][], labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
@@ -1046,14 +1062,44 @@ export function Feature() {
 
     const className = classList.join(' ');
 
+    const fileInfoBadge = (
+        <HoverCard width={300} position="right" shadow="md">
+            <HoverCard.Target>
+                <Button variant='transparent' size='compact-xs' style={{ padding: '3px', cursor: 'unset'}}>
+                    <IconInfoCircle style={{ width: rem(12), height: rem(12) }}/>
+                </Button>
+            </HoverCard.Target>
+            <HoverCard.Dropdown>
+                <Text size='xs'>
+                    The following files are required:
+                    <Space h='xs' />
+                    <List size='xs'>
+                        <List.Item>
+                            A code tokens file <b>tokenized_code_tokens_train.jsonl</b>
+                        </List.Item>
+                        <List.Item>
+                            A comment tokens file <b>tokenized_comment_tokens_train.jsonl</b>
+                        </List.Item>
+                        <List.Item>
+                            A Training file <b>labeling.jsonl</b> that contains code and docstring
+                        </List.Item>
+                        <List.Item>
+                            A labeling result file <b>sorted_labelling_sample_api.jsonl</b>, which determines the list below
+                        </List.Item>
+                    </List>
+                </Text>
+            </HoverCard.Dropdown>
+        </HoverCard>
+    );
+
     return (
         <div className={className} style={{ width: '960px' }}>
             <Flex align='flex-end'>
                 <TextInput
-                    disabled={true}
                     value={demoResultsDirectory}
-                    label='Tokens directory'
-                    description='Directory that contains tokens of samples'
+                    onChange={(event) => setOptionTokensDirectory(event.currentTarget.value)}
+                    label='Result directory'
+                    description={<>Directory that contains original text, tokens, and labeling files{fileInfoBadge}</>}
                     style={{ flexGrow: 1 }}
                 />
                 <Space w='sm'></Space>
@@ -1064,7 +1110,9 @@ export function Feature() {
                 <Checkbox
                     checked={optionOutlineTokens}
                     onChange={(event) => setOptionOutlineTokens(event.currentTarget.checked)}
-                    label='Outline Tokens' />
+                    label='Outline Tokens'
+                />
+
             </Group>
             <Space h='md'></Space>
             <Center>
@@ -1087,10 +1135,18 @@ export function Feature() {
                     Save Labeling
                 </Button>
             </Center>
-            <Group gap='sm' justify='center'>
-                {codeAreaForComment}
-                {codeAreaForCode}
-            </Group>
+            {
+                loaderOpened
+                    ?
+                    <Center h='300'>
+                        <Loader size='lg' color='blue' type='dots'/>
+                    </Center>
+                    :
+                    <Group gap='sm' justify='center'>
+                        {codeAreaForComment}
+                        {codeAreaForCode}
+                    </Group>
+            }
             {/* <TagsInput
                 value={selectedIndices}
                 onChange={searchSampleCallback}
@@ -1104,7 +1160,7 @@ export function Feature() {
                 title="Dumped String"
                 size="lg"
             >
-                <pre>
+                <pre style={{ overflow: 'hidden' }}>
                     <ScrollArea >
                         <code>
                             {dumpedString}
