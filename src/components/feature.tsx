@@ -3,11 +3,12 @@ import { IconArrowRight, IconArrowLeft, IconPlus } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
+import { parser } from 'stream-json';
 
 const demoFileServer = 'http://localhost:8080';
 const demoResultsDirectory = '/home/yuhuan/projects/cophi/vis-feat-proto/auto_labelling/';
-const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.json';
-const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.json';
+const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
+const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
 const demoTrainDataFile = 'train.jsonl';
 const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
 
@@ -604,7 +605,7 @@ function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigatio
                     color={ isSelected(i) ? 'blue' : 'gray' }
                     onClick={() => onChangeValue(startIndex + i)}
                 >
-                    {tags ? tags[startIndex + i + 1] : (startIndex + i + 1)}
+                    {tags ? tags[startIndex + i] : (startIndex + i + 1)}
                 </Button>
             ))}
             <Button
@@ -725,16 +726,22 @@ type Label = {
     color: string;
 }
 
-function setLabelOfTokens(sample: number, group: number, label: number, tokens: number[], provider: LabelingProvider, samples: Sample[], setSamples: (s: Sample[]) => void) {
+function setLabelOfTokens(sampleIndex: number, group: number, label: number, tokens: number[], provider: LabelingProvider, samples: Sample[], setSamples: (s: Sample[]) => void) {
+    const sample = samples[sampleIndex];
+
     if (label < 0) {
-        provider.removeTokensFromAllLabels(samples[sample].index, group, tokens);
+        provider.removeTokensFromAllLabels(sample.index, group, tokens);
     } else {
-        provider.changeTokensToLabel(samples[sample].index, group, label, tokens);
+        provider.changeTokensToLabel(sample.index, group, label, tokens);
     }
-    setSamples(samples.splice(sample, 1, {
-        ...samples[sample],
-        labelingRanges: provider.getTokensOnGroup(samples[sample].index, codeGroup) ?? []
-    }));
+    setSamples([
+        ...samples.slice(0, sampleIndex),
+        {
+            ...sample,
+            labelingRanges: provider.getTokensOnGroup(sample.index, group) ?? []
+        },
+        ...samples.slice(sampleIndex + 1)
+    ]);
 };
 
 function fetchResponse(fileName: string) {
@@ -750,6 +757,74 @@ function fetchResponse(fileName: string) {
             console.error('Cannot get response:', error);
         });
 }
+
+function readJsonLinesToList(res: Response | void): Promise<string[]> | undefined{
+    if (!res || (!res.body)) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    const result: string[] = [];
+    let buffer = '';
+
+    return reader.read().then(function processText({ done, value }): string[] | Promise<string[]> {
+        if (done) {
+            if (buffer) {
+                result.push(buffer);
+            }
+            return result;
+        }
+
+        const text = buffer + decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+        buffer = lines.pop() || ''; // Store incomplete line in buffer
+        result.push(...lines);
+
+        return reader.read().then(processText);
+    });
+}
+
+// function readHugeResponseToList(res: Response | void): Promise<string[][]> | undefined {
+//     if (!res || !res.body) return;
+
+//     return new Promise((resolve) => {
+//         const pipeline = res.body!
+//             .pipeThrough(new TextDecoderStream())
+//             .pipeThrough(new TransformStream({
+//                 transform(chunk, controller) {
+//                     const p = parser();
+//                     p.on('data', data => {
+//                         controller.enqueue(data.value);
+//                     });
+//                     p.write(chunk);
+//                 }
+//             }))
+//             .pipeThrough(new TransformStream({
+//                 transform(chunk, controller) {
+//                     const stream = streamArray();
+//                     stream.on('data', data => {
+//                         controller.enqueue(data.value);
+//                     });
+//                     stream.write(chunk);
+//                 }
+//             }));
+
+//         const codeTokenLists: string[][] = [];
+//         const reader = pipeline.getReader();
+
+//         const processChunks = async () => {
+//             while (true) {
+//                 const { done, value } = await reader.read();
+//                 if (done) {
+//                     resolve(codeTokenLists);
+//                     break;
+//                 }
+//                 codeTokenLists.push(value);
+//             }
+//         };
+
+//         processChunks();
+//     });
+// }
+
 
 export function Feature() {
     // Options
@@ -784,9 +859,14 @@ export function Feature() {
     const currentIndex = useMemo(() => {
         return labelingProvider.getSampleIndices()[currentLabelingResultIndex];
     }, [currentLabelingResultIndex, labelingProvider]);
+
+    const getValidSample = (samples: Sample[], index: number): Sample | undefined => {
+        return samples.find((sample) => sample.index === index);
+    };
+
     const sampleExists = useCallback(() => {
-        return codeSamples[currentIndex] && commentSamples[currentIndex];
-    }, [codeSamples, commentSamples, currentIndex]);
+        return getValidSample(codeSamples, currentIndex) && getValidSample(codeSamples, currentIndex);
+    }, [codeSamples, currentIndex]);
 
     // Labeling
     const [labels, setLabels] = useState<Label[]>([]);
@@ -804,11 +884,11 @@ export function Feature() {
     const updateLabelingProvider = useCallback(() => {
         if (!sampleExists()) return;
 
-        const numOfLabels = labelingProvider.getNumOfLabelsOnSample(codeSamples[currentLabelingResultIndex].index);
+        const numOfLabels = labelingProvider.getNumOfLabelsOnSample(currentIndex);
         const defaultGeneratedColors = generateColorForLabels(numOfLabels);
 
         setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
-    }, [codeSamples, currentLabelingResultIndex, labelingProvider, sampleExists]);
+    }, [currentIndex, labelingProvider, sampleExists]);
 
     const setLabelOfCodeTokens = useCallback((label: number) => {
         setLabelOfTokens(
@@ -868,39 +948,19 @@ export function Feature() {
             // FIXME too long nested, too many parenthesis
             if (labelingData !== undefined) {
                 fetchResponse(demoTrainDataFile)
-                    .then(res => {
-                        if (!res || (!res.body)) return;
-                        const reader = res.body.getReader();
-                        const decoder = new TextDecoder();
-                        const result: string[] = [];
-                        let buffer = '';
-
-                        return reader.read().then(function processText({ done, value }): string[] | Promise<string[]> {
-                            if (done) {
-                                if (buffer) {
-                                    result.push(buffer);
-                                }
-                                return result;
-                            }
-
-                            const text = buffer + decoder.decode(value, { stream: true });
-                            const lines = text.split('\n');
-                            buffer = lines.pop() || ''; // Store incomplete line in buffer
-                            result.push(...lines);
-
-                            return reader.read().then(processText);
-                        });
-
-                    })
-                    .then(textData => {
-                        if (textData === undefined) return;
-                        const data = textData.map((line) => JSON.parse(line.trim()));
+                    .then(readJsonLinesToList)
+                    .then(jsonList => {
+                        if (jsonList === undefined) return;
+                        const data = jsonList.map((line) => JSON.parse(line.trim()));
 
                         fetchResponse(demoCompleteCodeTokensFile)
-                            .then(res => {
-                                if (res) return res.json();
-                            })
-                            .then(codeTokenLists => {
+                            .then(readJsonLinesToList)
+                            .then(jsonList => {
+                                if (!jsonList) return;
+
+                                const codeTokenLists = jsonList.map((line) => JSON.parse(line.trim()));
+                                if (!codeTokenLists) return;
+
                                 setCodeSamples(labelingProvider.getSampleIndices().map((i: number) => {
                                     return {
                                         index: i,
@@ -911,10 +971,13 @@ export function Feature() {
                                 }));
                             });
                         fetchResponse(demoCompleteCommentTokensFile)
-                            .then(res => {
-                                if (res) return res.json();
-                            })
-                            .then(commentTokenLists => {
+                            .then(readJsonLinesToList)
+                            .then(jsonList => {
+                                if (!jsonList) return;
+
+                                const commentTokenLists = jsonList.map((line) => JSON.parse(line.trim()));
+                                if (!commentTokenLists) return;
+
                                 setCommentSamples(labelingProvider.getSampleIndices().map((i: number) => {
                                     return {
                                         index: i,
@@ -951,24 +1014,24 @@ export function Feature() {
             return null;
         }
         return codeArea(
-            commentSamples[currentLabelingResultIndex],
-            labelingProvider.getTokensOnGroup(commentSamples[currentLabelingResultIndex].index, commentGroup) ?? [],
+            getValidSample(commentSamples, currentIndex)!,
+            labelingProvider.getTokensOnGroup(currentIndex, commentGroup) ?? [],
             labels,
             setSelectedCommentTokens
         );
-    }, [sampleExists, commentSamples, currentLabelingResultIndex, labelingProvider, labels]);
+    }, [sampleExists, commentSamples, currentIndex, labelingProvider, labels]);
 
     const codeAreaForCode = useMemo(() => {
         if (!sampleExists()) {
             return null;
         }
         return codeArea(
-            codeSamples[currentLabelingResultIndex],
-            labelingProvider.getTokensOnGroup(codeSamples[currentLabelingResultIndex].index, codeGroup) ?? [],
+            getValidSample(codeSamples, currentIndex)!,
+            labelingProvider.getTokensOnGroup(currentIndex, codeGroup) ?? [],
             labels,
             setSelectedCodeTokens
         );
-    }, [sampleExists, codeSamples, currentLabelingResultIndex, labelingProvider, labels]);
+    }, [sampleExists, codeSamples, currentIndex, labelingProvider, labels]);
 
     // Data Loading
     useEffect(() => {

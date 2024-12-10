@@ -14,13 +14,18 @@
     "@mantine/core": "^7.14.3",
     "@mantine/hooks": "^7.14.3",
     "@tabler/icons-react": "^3.24.0",
+    "@types/big-json": "^3.2.5",
     "@types/serve-static": "^1.15.7",
+    "@types/stream-json": "^1.7.8",
+    "big-json": "^3.2.0",
     "embla-carousel-react": "^7.1.0",
     "express": "^4.21.2",
     "highlight.js": "^11.10.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "serve-static": "^1.16.2"
+    "serve-static": "^1.16.2",
+    "stream": "^0.0.3",
+    "stream-json": "^1.9.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
