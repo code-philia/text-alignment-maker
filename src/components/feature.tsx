@@ -1,9 +1,10 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor, HoverCard, Text, List, Loader } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor, HoverCard, Text, List, Loader, Stack } from '@mantine/core';
 import { IconArrowRight, IconArrowLeft, IconPlus, IconInfoCircle } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
 import { parser } from 'stream-json';
+import { useCookie } from 'react-use';
 
 const demoFileServer = 'http://localhost:8080';
 const demoResultsDirectory = '/home/yuhuan/projects/cophi/vis-feat-proto/auto_labelling/';
@@ -182,15 +183,23 @@ class LabelingProvider {
 
     addTokensToLabel(sample: number, group: number, label: number, tokens: number[]) {
         let indicesOfSample = this.sampleLabelGroupTokens.get(sample);
-        if (!indicesOfSample || indicesOfSample.length < label + 1) {    // TODO it's very difficult to guarantee the indexed element in array is not null
-            indicesOfSample = Array(label + 1).fill(0).map(() => [[], []]);
+        if (!indicesOfSample) {
+            indicesOfSample = [];
             this.sampleLabelGroupTokens.set(sample, indicesOfSample);
+        }
+        if (indicesOfSample.length < label + 1) {
+            const oldLength = indicesOfSample.length;
+            indicesOfSample.push(...Array(label + 1 - oldLength).fill(0).map(() => [[], []]));
         }
 
         let indicesOfSampleOfLabel = indicesOfSample[label];    // this could be an empty array, not an array of length 2!
-        if (!indicesOfSampleOfLabel || indicesOfSampleOfLabel.length < 2) {
-            indicesOfSampleOfLabel = Array(2).fill(0).map(() => []);
+        if (!indicesOfSampleOfLabel) {
+            indicesOfSampleOfLabel = [];
             indicesOfSample[label] = indicesOfSampleOfLabel;
+        }
+        if (indicesOfSampleOfLabel.length < 2) {
+            const oldLength = indicesOfSampleOfLabel.length;
+            indicesOfSampleOfLabel.push(...Array(2 - oldLength).fill(0).map(() => []));
         }
 
         let indicesOfSampleOfLabelOfGroup = indicesOfSampleOfLabel[group];
@@ -834,6 +843,16 @@ function readJsonLinesToList(res: Response | void): Promise<string[]> | undefine
 
 
 export function Feature() {
+    // Stored Options
+    const [cookieTokensDirectory, setCookieTokensDirectory] = useCookie('tokens-directory');
+
+    // Cookie Loading
+    useEffect(() => {
+        if (cookieTokensDirectory) {
+            setOptionTokensDirectory(cookieTokensDirectory);
+        }
+    }, [cookieTokensDirectory]);
+
     // Options
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
     const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
@@ -934,6 +953,9 @@ export function Feature() {
     };
 
     const loadFileCallback = useCallback(() => {
+        // FIXME too long, too nested ← written by Copilot
+        setCookieTokensDirectory(optionTokensDirectory);
+
         // TODO optimization, don't load full/all samples into memory
         setLoaderOpened(true);
         (async () => {
@@ -1000,9 +1022,13 @@ export function Feature() {
                                     };
                                 }));
                             });
-                        Promise.race([loadCode, loadComment]).then(() => {
-                            setLoaderOpened(false);
-                        });
+                        Promise.all([loadCode, loadComment])
+                            .catch((error) => {
+                                console.error('Error while loading tokens: ', error);
+                            })
+                            .then(() => {
+                                setLoaderOpened(false);
+                            });
                     });
             }
         })();
@@ -1096,7 +1122,7 @@ export function Feature() {
         <div className={className} style={{ width: '960px' }}>
             <Flex align='flex-end'>
                 <TextInput
-                    value={demoResultsDirectory}
+                    value={optionTokensDirectory}
                     onChange={(event) => setOptionTokensDirectory(event.currentTarget.value)}
                     label='Result directory'
                     description={<>Directory that contains original text, tokens, and labeling files{fileInfoBadge}</>}
@@ -1139,7 +1165,10 @@ export function Feature() {
                 loaderOpened
                     ?
                     <Center h='300'>
-                        <Loader size='lg' color='blue' type='dots'/>
+                        <Stack align='center' gap='xs'>
+                            <Text c='blue'>Loading Tokens...</Text>
+                            <Loader size='lg' color='blue' type='dots'/>
+                        </Stack>
                     </Center>
                     :
                     <Group gap='sm' justify='center'>
