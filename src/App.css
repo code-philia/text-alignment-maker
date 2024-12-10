@@ -7,7 +7,8 @@
 }
 
 pre {
-  background-color: #f6f5f3;
+  background-color: #fff9ef;
+  margin: 0;
   padding: 1em;
   border-radius: 0.5em;
 }
@@ -41,15 +42,15 @@ code {
 }
 
 .outline-tokens .target-code-pre span {
-  background-color: rgba(173, 216, 230, 0.2);
+  background-color: rgba(184, 235, 252, 0.3);
 }
 
 .target-code-pre span:hover {
-  background-color: rgba(173, 216, 230, 0.5);
+  background-color: rgba(184, 235, 252, 0.6);
 }
 
 .target-code-pre span.selected {
-  background-color: rgba(173, 216, 230, 1.0);
+  background-color: rgba(184, 235, 252, 1.0);
 }
 
 .number-navigation-button {
