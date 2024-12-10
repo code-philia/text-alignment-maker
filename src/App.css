@@ -8,6 +8,8 @@
 
 pre {
   background-color: #f6f5f3;
+  padding: 1em;
+  border-radius: 0.5em;
 }
 
 code {
@@ -16,9 +18,6 @@ code {
 
 .target-code-pre {
   text-wrap: wrap;
-  padding: 1em;
-  border-radius: 0.5em;
-  
   line-height: 1.1em;
 }
 

@@ -16,6 +16,7 @@ type Sample = {
     index: number,
     text: string,
     tokens: string[],
+    labelingRanges: number[][];
 }
 
 const demoCommentSamples: Sample[] = [
@@ -23,6 +24,7 @@ const demoCommentSamples: Sample[] = [
         index: 3864,
         text: comment_text,
         tokens: comment_tokens,
+        labelingRanges: []
     }
 ];
 const demoCodeSamples: Sample[] = [
@@ -30,6 +32,7 @@ const demoCodeSamples: Sample[] = [
         index: 3864,
         text: code_text,
         tokens: code_tokens,
+        labelingRanges: []
     }
 ];
 
@@ -96,21 +99,34 @@ const commentGroup = 0;
 const codeGroup = 1;
 
 type LabelingProviderOptions = {
+    indicesMap?: Map<number, number[][][]>;
     content?: string,
     onSave?: (dumped: string) => void
 };
+
 class LabelingProvider {
-    // suppose the first group is comment and the second group is code
     private indicesOfEachSampleByLabelByGroup: Map<number, number[][][]> = new Map();
     private onSave?: (dumped: string) => void;
 
-    constructor({ content, onSave }: LabelingProviderOptions) {
-        if (content) {
+    // suppose the first group is comment and the second group is code
+    constructor({ indicesMap, content, onSave }: LabelingProviderOptions) {
+        if (indicesMap) {
+            this.indicesOfEachSampleByLabelByGroup = indicesMap;
+        } else if (content) {
             this.load(content);
         }
         if (onSave) {
             this.onSave = onSave;
         }
+    }
+
+    copy() {
+        return new LabelingProvider(
+            {
+                indicesMap: new Map(this.indicesOfEachSampleByLabelByGroup),
+                onSave: this.onSave
+            }
+        );
     }
 
     private parseSample(line: string): [number, number[][][]] | undefined {
@@ -150,23 +166,28 @@ class LabelingProvider {
         return this.indicesOfEachSampleByLabelByGroup.get(sample)?.map((label) => label[group]);
     }
 
-    addTokensOnLabel(sample: number, group: number, label: number, tokens: number[]) {
-        const indicesOfSample = this.indicesOfEachSampleByLabelByGroup.get(sample);
+    addTokensToLabel(sample: number, group: number, label: number, tokens: number[]) {
+        let indicesOfSample = this.indicesOfEachSampleByLabelByGroup.get(sample);
         if (!indicesOfSample) {
-            this.indicesOfEachSampleByLabelByGroup.set(sample, Array.from({ length: label + 1 }, () => []));
+            indicesOfSample = Array.from({ length: label + 1 }, () => []);
+            this.indicesOfEachSampleByLabelByGroup.set(sample, indicesOfSample);
         }
 
-        const indicesOfSampleByLabel = this.indicesOfEachSampleByLabelByGroup.get(sample);
-        if (!indicesOfSampleByLabel) {
-            return;
+        let indicesOfSampleOfLabel = indicesOfSample[label];
+        if (!indicesOfSampleOfLabel) {
+            indicesOfSampleOfLabel = Array.from({ length: 2 }, () => []);
+            indicesOfSample[label] = indicesOfSampleOfLabel;
         }
 
-        const indicesOfSampleByLabelByGroup = indicesOfSampleByLabel[group];
-        if (!indicesOfSampleByLabelByGroup) {
-            return;
+        let indicesOfSampleOfLabelOfGroup = indicesOfSampleOfLabel[group];
+        if (!indicesOfSampleOfLabelOfGroup) {
+            indicesOfSampleOfLabelOfGroup = [];
+            indicesOfSampleOfLabel[group] = indicesOfSampleOfLabelOfGroup;
         }
 
-        indicesOfSampleByLabelByGroup.push(tokens);
+        // FIXME extract the auto-adding chain-indexing above to a function
+
+        indicesOfSampleOfLabelOfGroup.push(...tokens);
     }
 
     removeTokensOnLabel(sample: number, group: number, label: number, tokens: number[]) {
@@ -187,7 +208,7 @@ class LabelingProvider {
 
         const tokensSet = new Set(tokens);
         const newIndices = indicesOfSampleByLabelByGroup.filter((idx) => {
-            return tokensSet.has(idx);
+            return !tokensSet.has(idx);
         });
 
         indicesOfSampleByLabelByGroup.length = 0;
@@ -199,6 +220,11 @@ class LabelingProvider {
         for (let i = 0; i < this.getNumOfLabels(sample); ++i) {
             this.removeTokensOnLabel(sample, group, i, tokens);
         }
+    }
+
+    changeTokensToLabel(sample: number, group: number, label: number, tokens: number[]) {
+        this.removeTokensFromAllLabels(sample, group, tokens);
+        this.addTokensToLabel(sample, group, label, tokens);
     }
 
     load(content: string) {
@@ -226,27 +252,13 @@ class LabelingProvider {
     }
 }
 
-type ILabelingLoadAction = {
-    type: 'load',
-    content: string
-};
-type ILabelingSaveAction = {
-    type: 'save'
-};
-type ILabelingRemoveAction = {
-    type: 'removeAllLabels'
-    sample: number,
-    group: number,
-    tokens: number[]
-};
-type ILabelingAddAction = {
-    type: 'addToLabel',
-    sample: number,
-    group: number,
-    label: number,
-    tokens: number[]
-};
-type ILabelingAction = ILabelingLoadAction | ILabelingSaveAction | ILabelingRemoveAction | ILabelingAddAction;
+// the only way to use this OOP data processing center is to customize a hook
+// function useLabelingProvider() {
+//     const LabelingProvider =
+//     const { provider, setProvider } = useState();
+
+//     return { remove, getTokensOnGroup }
+// }
 
 function isSpecialToken(token: string) {
     return token.startsWith('<') && token.endsWith('>');
@@ -381,11 +393,11 @@ function expandSelectedRanges(selection: Selection, targetSpans: HTMLElement[]) 
         const startContainer = range.startContainer;
         const endContainer = range.endContainer;
 
-        selection.removeRange(range);
-
         const startSpan = targetSpans.find((span) => span.contains(startContainer));
         const endSpan = targetSpans.find((span) => span.contains(endContainer));
+
         if (startSpan && endSpan) {
+            selection.removeRange(range);
             range.setStart(startSpan, 0);
             range.setEnd(endSpan, endSpan.childNodes.length);
 
@@ -415,30 +427,16 @@ function getNumberOfElement(element: HTMLElement, prefix: string) {
     }
     return undefined;
 };
-function processCodeStyle(code: HTMLElement, onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) {
-    const targetSpans: HTMLElement[] = [];
-
-    code.childNodes.forEach((node) => {
-        if (node instanceof HTMLSpanElement){
-            targetSpans.push(node);
-        }
-    });
+function processSelectionEvents(code: HTMLElement, onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) {
 
     // deal with selected spans style changing
-    let manualSelectionChange = false;
-
     const onWindowSelectionChange = () => {
-        if (manualSelectionChange) {
-            manualSelectionChange = false;
-            return;
-        }
-
         const selection = window.getSelection();
-        if (focused && selection && selection.rangeCount > 0) {
+        if (selection && selection.rangeCount > 0) {
             const selectedElements = new Set(getSelectedNodes(selection, Array.from(code.childNodes)));
 
             const selectedTokenIndices: number[] = [];
-            targetSpans.forEach((span) => {
+            code.querySelectorAll('span').forEach((span) => {
                 if (selectedElements.has(span)) {
                     const tokenIndex = getFollowingNumber(span.classList[0], tokenIndexPrefix);
                     if (tokenIndex !== undefined) {
@@ -453,45 +451,49 @@ function processCodeStyle(code: HTMLElement, onTokenSelectionChange?: (selectedT
 
             onTokenSelectionChange?.(selectedTokenIndices);
         } else {
-            targetSpans.forEach((span) => {
+            code.querySelectorAll('span').forEach((span) => {
                 span.classList.remove('selected');
             });
+
+            onTokenSelectionChange?.([]);
         }
     };
     document.addEventListener('selectionchange', onWindowSelectionChange);
 
     // deal with focus and unfocus
-    let focused = false;
+    // let focused = false;
 
-    const onWindowMouseDown = (e: MouseEvent) => {
-        if (!mouseEventLiesIn(e, ...targetSpans)) {
-            focused = false;
-            targetSpans.forEach((span) => {
-                span.classList.remove('selected');
-            });
-        }
-    };
-    window.addEventListener('mousedown', onWindowMouseDown);
+    // const onWindowMouseDown = (e: MouseEvent) => {
+    //     if (!mouseEventLiesIn(e, ...targetSpans)) {
+    //         focused = false;
+    //         targetSpans.forEach((span) => {
+    //             span.classList.remove('selected');
+    //         });
+
+    //         onTokenSelectionChange?.([]);
+    //     }
+    // };
+    // window.addEventListener('mousedown', onWindowMouseDown);
 
     // detail: all the range of the covered spans are selected
     const onWindowMouseUp = () => {
         const selection = window.getSelection();
-        if (focused && selection && selection.rangeCount > 0) {
-            expandSelectedRanges(selection, targetSpans);
-            manualSelectionChange = true;
+        if (selection && selection.rangeCount > 0) {
+            expandSelectedRanges(selection, Array.from(code.querySelectorAll('span')));
         }
     };
     window.addEventListener('mouseup', onWindowMouseUp);
 
-    const onEachSpanMouseDown = () => {
-        focused = true;
-    };
-    targetSpans.forEach((span) => {
-        span.addEventListener('mousedown', onEachSpanMouseDown);
-    });
+    // const onEachSpanMouseDown = () => {
+    //     focused = true;
+    // };
+    // targetSpans.forEach((span) => {
+    //     span.addEventListener('mousedown', onEachSpanMouseDown);
+    // });
 
     return () => {
         document.removeEventListener('selectionchange', onWindowSelectionChange);
+        window.removeEventListener('mouseup', onWindowMouseUp);
     };
 }
 
@@ -530,7 +532,7 @@ function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, onTokenSele
         if (codeRef.current) {
             generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices);
             processTokens(codeRef.current, groupColors);
-            processCodeStyle(codeRef.current, onTokenSelectionChange);
+            return processSelectionEvents(codeRef.current, onTokenSelectionChange);
         }
     }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);
 
@@ -610,7 +612,7 @@ type AlignmentLabelsProps = {
 
 function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsProps) {
     const [newLabelText, setNewLabelText] = useState('');
-    const [newLabelColor, setNewLabelColor] = useState('#000000');
+    const [newLabelColor, setNewLabelColor] = useState('#000000');  // FIXME just a placeholder now, not changeable
     const [modalOpened, setModalOpened] = useState(false);
 
     const addLabel = () => {
@@ -629,7 +631,7 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
                     <Badge
                         color='black'
                         className='label-badge remove-label'
-                        onClick={() => onClickLabel?.(-1)}
+                        onMouseDown={() => onClickLabel?.(-1)}
                     >
                         No Label
                     </Badge>
@@ -639,7 +641,7 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
                             color={label.color}
                             variant="filled"
                             className='label-badge'
-                            onClick={() => onClickLabel?.(index)}
+                            onMouseDown={() => onClickLabel?.(index)}
                         >
                             {label.text}
                         </Badge>
@@ -648,7 +650,10 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
                         leftSection={<IconPlus style={{ width: rem(12), height: rem(12) }} />}
                         color='gray'
                         className='label-badge add-label'
-                        onClick={() => setModalOpened(true)}
+                        onClick={() => {
+                            setNewLabelText(`Label ${labels.length + 1}`);   // FIXME this should use a same function as the setLabels function creating labels below
+                            setModalOpened(true);
+                        }}
                     >
                         New
                     </Badge>
@@ -667,13 +672,13 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
                     value={newLabelText}
                     onChange={(event) => setNewLabelText(event.target.value)}
                 />
-                <ColorInput
+                {/* <ColorInput
                     label="Label Color"
                     placeholder="Pick a color"
                     value={newLabelColor}
                     onChange={(value) => setNewLabelColor(value)}
                     style={{ marginTop: '15px' }}
-                />
+                /> */}
                 <Group align="right" style={{ marginTop: '20px' }}>
                     <Button onClick={addLabel}>Add</Button>
                 </Group>
@@ -682,14 +687,15 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
     );
 };
 
+const standardColors: MantineColor[] = ['blue', 'green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
+function generateColorForLabelIndex(index: number) {
+    return standardColors[index % standardColors.length];
+}
 function generateColorForLabels(num: number) {
-    const standardColors: MantineColor[] = ['blue', 'green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
     const colors: MantineColor[] = [];
-
     for (let i = 0; i < num; i++) {
-        colors.push(standardColors[i % standardColors.length]);
+        colors.push(generateColorForLabelIndex(i));
     }
-
     return colors;
 }
 
@@ -698,9 +704,21 @@ type Label = {
     color: string;
 }
 
+function setLabelOfTokens(sample: number, group: number, label: number, tokens: number[], provider: LabelingProvider, samples: Sample[], setSamples: (s: Sample[]) => void) {
+    if (label < 0) {
+        provider.removeTokensFromAllLabels(samples[sample].index, group, tokens);
+    } else {
+        provider.changeTokensToLabel(samples[sample].index, group, label, tokens);
+    }
+    setSamples(samples.splice(sample, 1, {
+        ...samples[sample],
+        labelingRanges: provider.getTokensOnGroup(samples[sample].index, codeGroup) ?? []
+    }));
+};
+
 export function Feature() {
     // Options
-    const [optionOutlineTokens, setOptionOutlineTokens] = useState(false);
+    const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
     const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
     const [optionLocalServer, setOptionLocalServer] = useState(demoFileServer);
 
@@ -708,25 +726,7 @@ export function Feature() {
     const [codeSamples, setCodeSamples] = useState<Sample[]>(demoCodeSamples);
     const [commentSamples, setCommentSamples] = useState<Sample[]>(demoCommentSamples);
 
-    const [labelingProvider, dispatchLabelingProvider] = useReducer(
-        (state: LabelingProvider, action: ILabelingAction) => {
-            switch (action.type) {
-                case 'load':
-                    state.load(action.content);
-                    return state;
-                case 'save':
-                    state.save();
-                    return state;
-                case 'removeAllLabels':
-                    state.removeTokensFromAllLabels(action.sample, action.group, action.tokens);
-                    return state;
-                case 'addToLabel':
-                    state.addTokensOnLabel(action.sample, action.group, action.label, action.tokens);
-                    return state;
-                default:
-                    return state;
-            }
-        },
+    const [labelingProvider, setLabelingProvider] = useState(
         new LabelingProvider({
             content: '',
             onSave: (dumped) => {
@@ -750,31 +750,51 @@ export function Feature() {
     const [selectedCodeTokens, setSelectedCodeTokens] = useState<number[]>([]);
     const [selectedCommentTokens, setSelectedCommentTokens] = useState<number[]>([]);
 
-    const setLabelOfTokens = (group: number, label: number, tokens: number[]) => {
-        if (label < 0) {
-            dispatchLabelingProvider({
-                type: 'removeAllLabels',
-                sample: currentSampleIndex,
-                group,
-                tokens
-            });
-        } else {
-            dispatchLabelingProvider({
-                type: 'addToLabel',
-                sample: currentSampleIndex,
-                group,
-                label,
-                tokens
-            });
-        }
+    const setLabelsWithDefaultColor = (labels: Label[]) => {
+        // FIXME should avoid modifying the original object, everywhere?
+        labels.forEach((label, i) => {
+            label.color = generateColorForLabelIndex(i);
+        });
+        setLabels(labels);
     };
 
-    const clickLabelCallback = (labelIndex: number) => {
+    const updateLabelingProvider = useCallback(() => {
+        const numOfLabels = labelingProvider.getNumOfLabels(codeSamples[currentSampleIndex].index);
+        const defaultGeneratedColors = generateColorForLabels(numOfLabels);
+
+        setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
+    }, [codeSamples, currentSampleIndex, labelingProvider]);
+
+    const setLabelOfCodeTokens = useCallback((label: number) => {
+        setLabelOfTokens(
+            currentSampleIndex,
+            codeGroup,
+            label,
+            selectedCodeTokens,
+            labelingProvider,
+            codeSamples,
+            setCodeSamples
+        );
+    }, [currentSampleIndex, selectedCodeTokens, codeSamples, labelingProvider]);
+
+    const setLabelOfCommentTokens = useCallback((label: number) => {
+        setLabelOfTokens(
+            currentSampleIndex,
+            commentGroup,
+            label,
+            selectedCommentTokens,      // TODO can we decouple "code and comment" to any multiple groups?
+            labelingProvider,
+            commentSamples,
+            setCommentSamples
+        );
+    }, [currentSampleIndex, selectedCommentTokens, commentSamples, labelingProvider]);
+
+    const clickLabelCallback = (label: number) => {
         if (selectedCodeTokens.length > 0) {
-            setLabelOfTokens(codeGroup, labelIndex, selectedCodeTokens);
+            setLabelOfCodeTokens(label);
         }
         if (selectedCommentTokens.length > 0) {
-            setLabelOfTokens(commentGroup, labelIndex, selectedCommentTokens);
+            setLabelOfCommentTokens(label);
         }
     };
 
@@ -789,12 +809,14 @@ export function Feature() {
                 return response.text();
             })
             .then((data) => {
-                dispatchLabelingProvider({ type: 'load', content: data });
+                labelingProvider.load(data);
+                setLabelingProvider(labelingProvider.copy());
+                updateLabelingProvider();
             })
             .catch((error) => {
                 console.error('Cannot get json:', error);
             });
-    }, [optionLocalServer]);
+    }, [labelingProvider, optionLocalServer, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
 
     // Code Area
     const codeArea = (sample: Sample, labelingRanges: number[][], labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
@@ -804,7 +826,10 @@ export function Feature() {
                 tokens={sample.tokens}
                 groupedTokenIndices={labelingRanges}
                 groupColors={labels.map((label) => label.color)}
-                onTokenSelectionChange={onTokenSelectionChange}
+                onTokenSelectionChange={(s: number[]) => {
+                    console.log(`selection changed to ${s}`);
+                    onTokenSelectionChange?.(s);
+                }}
             />
         );
     };
@@ -816,7 +841,7 @@ export function Feature() {
             labels,
             setSelectedCommentTokens
         );
-    }, [codeSamples, commentSamples, currentSampleIndex, labelingProvider, labels]);
+    }, [codeSamples, commentSamples, currentSampleIndex, labels, labelingProvider]);
 
     const codeAreaForCode = useMemo(() => {
         return codeArea(
@@ -825,16 +850,13 @@ export function Feature() {
             labels,
             setSelectedCodeTokens
         );
-    }, [codeSamples, currentSampleIndex, labelingProvider, labels]);
+    }, [codeSamples, currentSampleIndex, labels, labelingProvider]);
 
     // Data Loading
     useEffect(() => {
         // Set up labels and colors
-        const numOfLabels = labelingProvider.getNumOfLabels(currentSampleIndex);
-        const defaultGeneratedColors = generateColorForLabels(numOfLabels);
-
-        setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
-    }, [currentSampleIndex, labelingProvider]);
+        updateLabelingProvider();
+    }, [currentSampleIndex, updateLabelingProvider]);   // FIXME why should we call again here, after rendering all the code?
 
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
@@ -879,9 +901,14 @@ export function Feature() {
             <Center>
                 <AlignmentLabels
                     labels={labels}
-                    setLabels={setLabels}
+                    setLabels={setLabelsWithDefaultColor}
                     onClickLabel={clickLabelCallback}
                 />
+                <Button
+                    onClick={() => labelingProvider.save()}
+                >
+                    Save Labeling
+                </Button>
             </Center>
             <Group gap='sm' justify='center'>
                 {codeAreaForComment}
@@ -901,8 +928,18 @@ export function Feature() {
                 size="lg"
             >
                 <pre>
-                    <code>{dumpedString}</code>
+                    <ScrollArea >
+                        <code>
+                            {dumpedString}
+                        </code>
+                    </ScrollArea>
                 </pre>
+                <Button
+                    onClick={() => {
+                        navigator.clipboard.writeText(dumpedString);
+                        setModalOpened(false);
+                    }}
+                >Copy</Button>
             </Modal>
         </div>
     );
