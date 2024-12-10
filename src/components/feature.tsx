@@ -1,4 +1,4 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor, HoverCard, Text, List, Loader, Stack } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider } from '@mantine/core';
 import { IconArrowRight, IconArrowLeft, IconPlus, IconInfoCircle } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
@@ -585,7 +585,7 @@ type NumberNavigationProps = {
 }
 
 function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigationProps) {
-    const numOfOptions = 10;
+    const numOfOptions = 8;
 
     const page = Math.floor(value / numOfOptions);
     const totalPages = Math.ceil(total / numOfOptions);
@@ -665,13 +665,24 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
         <>
             <div style={{ padding: '20px' }}>
                 <Group gap="sm">
-                    <Badge
-                        color='black'
-                        className='label-badge remove-label'
-                        onMouseDown={() => onClickLabel?.(-1)}
-                    >
-                        No Label
-                    </Badge>
+                    {
+                        labels.length > 0
+                            ?
+                            <Badge
+                                color='black'
+                                className='label-badge remove-label'
+                                onMouseDown={() => onClickLabel?.(-1)}
+                            >
+                                No Label
+                            </Badge>
+                            :
+                            <Badge
+                                color='black'
+                                className='label-badge remove-label'
+                            >
+                                No Labels Yet
+                            </Badge>
+                    }
                     {labels.map((label, index) => (
                         <Badge
                             key={index}
@@ -683,17 +694,23 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
                             {label.text}
                         </Badge>
                     ))}
-                    <Badge
-                        leftSection={<IconPlus style={{ width: rem(12), height: rem(12) }} />}
-                        color='gray'
-                        className='label-badge add-label'
-                        onClick={() => {
-                            setNewLabelText(`Label ${labels.length + 1}`);   // FIXME this should use a same function as the setLabels function creating labels below
-                            setModalOpened(true);
-                        }}
-                    >
-                        New
-                    </Badge>
+                    {
+                        labels.length > 0
+                            ?
+                            <Badge
+                                leftSection={<IconPlus style={{ width: rem(12), height: rem(12) }} />}
+                                color='gray'
+                                className='label-badge add-label'
+                                onClick={() => {
+                                    setNewLabelText(`Label ${labels.length + 1}`);   // FIXME this should use a same function as the setLabels function creating labels below
+                                    setModalOpened(true);
+                                }}
+                            >
+                                New
+                            </Badge>
+                            :
+                            null
+                    }
                 </Group>
 
             </div>
@@ -883,6 +900,23 @@ export function Feature() {
     // Navigation
     const [currentLabelingResultIndex, setCurrentSampleIndex] = useState(0);     // !! THIS IS the index from all labeling results !!
     // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
+    const [goToIndex, setGoToIndex] = useState<string | number>('0');
+    const [goToIndexError, setGoToIndexError] = useState<boolean>(false);
+
+    const handleGoTo = () => {
+        if (!(typeof goToIndex === 'number')) return;
+
+        const targetLabeling = labelingProvider.getSampleIndices().findIndex((i) => i === goToIndex);
+        if (targetLabeling > 0) {
+            setCurrentSampleIndex(targetLabeling);
+            setGoToIndexError(false);
+        } else {
+            setGoToIndexError(true);
+            setTimeout(() => {
+                setGoToIndexError(false);
+            }, 800);
+        }
+    };
 
     // Valid State Detection
     const currentIndex = useMemo(() => {
@@ -1141,25 +1175,57 @@ export function Feature() {
 
             </Group>
             <Space h='md'></Space>
-            <Center>
-                <NumberNavigation
-                    value={currentLabelingResultIndex}
-                    total={labelingProvider.getSampleIndices().length}
-                    onChangeValue={setCurrentSampleIndex}
-                    tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
-                />
-            </Center>
+            <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
+                <Grid.Col span={2.8}>
+                    <Group gap='xs' align='center'>
+                        <Button
+                            onClick={handleGoTo}
+                        >
+                            Go to
+                        </Button>
+                        <NumberInput
+                            value={goToIndex}
+                            onChange={(value) => setGoToIndex(value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
+                                    handleGoTo();
+                                }
+                            }}
+                            error={goToIndexError}
+                            w='90'
+                        >
+                        </NumberInput>
+                    </Group>
+                </Grid.Col>
+                <Grid.Col span={6.4}>
+                    <Center>
+                        <NumberNavigation
+                            value={currentLabelingResultIndex}
+                            total={labelingProvider.getSampleIndices().length}
+                            onChangeValue={setCurrentSampleIndex}
+                            tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
+                        />
+                    </Center>
+                </Grid.Col>
+                <Grid.Col span={2.8}>
+                    <Group justify='flex-end'>
+                        <Button
+                            w='11em'
+                            onClick={() => labelingProvider.save()}
+                        >
+                            Save Labeling
+                        </Button>
+                    </Group>
+                </Grid.Col>
+            </Grid>
+            <Space h='lg' />
+            <Divider />
             <Center>
                 <AlignmentLabels
                     labels={labels}
                     setLabels={setLabelsWithDefaultColor}
                     onClickLabel={clickLabelCallback}
                 />
-                <Button
-                    onClick={() => labelingProvider.save()}
-                >
-                    Save Labeling
-                </Button>
             </Center>
             {
                 loaderOpened
