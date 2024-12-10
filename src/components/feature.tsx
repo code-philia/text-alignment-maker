@@ -802,7 +802,7 @@ export function Feature() {
 
     // A test function of fetch
     const loadFileCallback = useCallback(() => {
-        fetch(`${optionLocalServer}${demoResultsDirectory}${demoLabelingFilePath}`)
+        fetch(`/mock/${demoLabelingFilePath}`)
             .then((response) => {
                 if (!response.ok) {
                     throw new Error('Cannot fetch labeling file');
@@ -869,11 +869,6 @@ export function Feature() {
 
     return (
         <div className={className} style={{ width: '960px' }}>
-            <TextInput
-                disabled={true}
-                value={optionLocalServer}
-                label='File Server'
-                description='Local server providing access to file' />
             <Flex align='flex-end'>
                 <TextInput
                     disabled={true}
