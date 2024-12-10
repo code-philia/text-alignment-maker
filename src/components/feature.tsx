@@ -8,6 +8,7 @@ const demoFileServer = 'http://localhost:8080';
 const demoResultsDirectory = '/home/yuhuan/projects/cophi/vis-feat-proto/auto_labelling/';
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.json';
 const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.json';
+const demoTrainDataFile = 'train.jsonl';
 const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
 
 // const lorem = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
@@ -107,13 +108,19 @@ type LabelingProviderOptions = {
 };
 
 class LabelingProvider {
-    private sampleLabelGroupIndices: Map<number, number[][][]> = new Map();
+    listOfSampleLabelGroupIndices: {
+        idx: number;
+        match: number[][][];
+    }[] = [];
+    private sampleIndices: number[] = [];
+    private sampleLabelGroupTokens: Map<number, number[][][]> = new Map();
     private onSave?: (dumped: string) => void;
 
     // suppose the first group is comment and the second group is code
     constructor({ indicesMap, content, onSave }: LabelingProviderOptions) {
         if (indicesMap) {
-            this.sampleLabelGroupIndices = indicesMap;
+            this.sampleLabelGroupTokens = indicesMap;
+            this.loadMapToList();
         } else if (content) {
             this.load(content);
         }
@@ -125,7 +132,7 @@ class LabelingProvider {
     copy() {
         return new LabelingProvider(
             {
-                indicesMap: new Map(this.sampleLabelGroupIndices),
+                indicesMap: new Map(this.sampleLabelGroupTokens),
                 onSave: this.onSave
             }
         );
@@ -156,23 +163,27 @@ class LabelingProvider {
         }
     }
 
-    getNumOfLabels(sample: number) {
-        return this.sampleLabelGroupIndices.get(sample)?.length ?? 0;
+    getNumOfLabelsOnSample(sample: number) {
+        return this.sampleLabelGroupTokens.get(sample)?.length ?? 0;
+    }
+
+    getSampleIndices() {
+        return this.sampleIndices;
     }
 
     getTokensOnGroupOnLabel(sample: number, group: number, label: number) {
-        return this.sampleLabelGroupIndices.get(sample)?.[label]?.[group];
+        return this.sampleLabelGroupTokens.get(sample)?.[label]?.[group];
     }
 
     getTokensOnGroup(sample: number, group: number) {
-        return this.sampleLabelGroupIndices.get(sample)?.map((label) => label[group] ?? []);
+        return this.sampleLabelGroupTokens.get(sample)?.map((label) => label[group] ?? []);
     }
 
     addTokensToLabel(sample: number, group: number, label: number, tokens: number[]) {
-        let indicesOfSample = this.sampleLabelGroupIndices.get(sample);
+        let indicesOfSample = this.sampleLabelGroupTokens.get(sample);
         if (!indicesOfSample || indicesOfSample.length < label + 1) {    // TODO it's very difficult to guarantee the indexed element in array is not null
             indicesOfSample = Array(label + 1).fill(0).map(() => [[], []]);
-            this.sampleLabelGroupIndices.set(sample, indicesOfSample);
+            this.sampleLabelGroupTokens.set(sample, indicesOfSample);
         }
 
         let indicesOfSampleOfLabel = indicesOfSample[label];    // this could be an empty array, not an array of length 2!
@@ -193,7 +204,7 @@ class LabelingProvider {
     }
 
     removeTokensOnLabel(sample: number, group: number, label: number, tokens: number[]) {
-        const indicesOfSample = this.sampleLabelGroupIndices.get(sample);
+        const indicesOfSample = this.sampleLabelGroupTokens.get(sample);
         if (!indicesOfSample) {
             return;
         }
@@ -219,7 +230,7 @@ class LabelingProvider {
 
     // TODO A question, using sample as number? Should be sampleIndex? :)
     removeTokensFromAllLabels(sample: number, group: number, tokens: number[]) {
-        for (let i = 0; i < this.getNumOfLabels(sample); ++i) {
+        for (let i = 0; i < this.getNumOfLabelsOnSample(sample); ++i) {
             this.removeTokensOnLabel(sample, group, i, tokens);
         }
     }
@@ -238,14 +249,21 @@ class LabelingProvider {
             const parsed = this.parseSample(line);
             if (parsed) {
                 const [idx, ranges] = parsed;
-                this.sampleLabelGroupIndices.set(idx, ranges);
+                this.sampleLabelGroupTokens.set(idx, ranges);
             }
         });
+        this.loadMapToList();
+    }
+
+    loadMapToList() {
+        this.listOfSampleLabelGroupIndices = Array.from(this.sampleLabelGroupTokens.entries())
+            .map(([idx, match]) => ({ idx, match }));
+        this.sampleIndices = this.listOfSampleLabelGroupIndices.map((sample) => sample.idx);
     }
 
     save() {
         if (this.onSave) {
-            const dumped = Array.from(this.sampleLabelGroupIndices.entries())
+            const dumped = Array.from(this.sampleLabelGroupTokens.entries())
                 .map(([idx, indicesOfSample]) => JSON.stringify({ idx, match: indicesToMatch(indicesOfSample) }))
                 .join('\n');
 
@@ -553,9 +571,10 @@ type NumberNavigationProps = {
     value: number;
     total: number;
     onChangeValue: (i: number) => void;
+    tags?: string[];
 }
 
-function NumberNavigationProps({ value, total, onChangeValue }: NumberNavigationProps) {
+function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigationProps) {
     const numOfOptions = 10;
 
     const startIndex = Math.floor(value / numOfOptions) * numOfOptions;
@@ -585,7 +604,7 @@ function NumberNavigationProps({ value, total, onChangeValue }: NumberNavigation
                     color={ isSelected(i) ? 'blue' : 'gray' }
                     onClick={() => onChangeValue(startIndex + i)}
                 >
-                    {startIndex + i + 1}
+                    {tags ? tags[startIndex + i + 1] : (startIndex + i + 1)}
                 </Button>
             ))}
             <Button
@@ -718,6 +737,20 @@ function setLabelOfTokens(sample: number, group: number, label: number, tokens: 
     }));
 };
 
+function fetchResponse(fileName: string) {
+    return fetch(`/mock/${fileName}`)
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error('Cannot fetch file: ' + fileName);
+            }
+
+            return response;
+        })
+        .catch((error) => {
+            console.error('Cannot get response:', error);
+        });
+}
+
 export function Feature() {
     // Options
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
@@ -725,8 +758,8 @@ export function Feature() {
     const [optionLocalServer, setOptionLocalServer] = useState(demoFileServer);
 
     // Data
-    const [codeSamples, setCodeSamples] = useState<Sample[]>(demoCodeSamples);
-    const [commentSamples, setCommentSamples] = useState<Sample[]>(demoCommentSamples);
+    const [codeSamples, setCodeSamples] = useState<Sample[]>([]);
+    const [commentSamples, setCommentSamples] = useState<Sample[]>([]);
 
     const [labelingProvider, setLabelingProvider] = useState(
         new LabelingProvider({
@@ -744,8 +777,16 @@ export function Feature() {
     const [modalOpened, setModalOpened] = useState(false);
 
     // Navigation
-    const [currentSampleIndex, setCurrentSampleIndex] = useState(0);
+    const [currentLabelingResultIndex, setCurrentSampleIndex] = useState(0);     // !! THIS IS the index from all labeling results !!
     // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
+
+    // Valid State Detection
+    const currentIndex = useMemo(() => {
+        return labelingProvider.getSampleIndices()[currentLabelingResultIndex];
+    }, [currentLabelingResultIndex, labelingProvider]);
+    const sampleExists = useCallback(() => {
+        return codeSamples[currentIndex] && commentSamples[currentIndex];
+    }, [codeSamples, commentSamples, currentIndex]);
 
     // Labeling
     const [labels, setLabels] = useState<Label[]>([]);
@@ -761,15 +802,17 @@ export function Feature() {
     };
 
     const updateLabelingProvider = useCallback(() => {
-        const numOfLabels = labelingProvider.getNumOfLabels(codeSamples[currentSampleIndex].index);
+        if (!sampleExists()) return;
+
+        const numOfLabels = labelingProvider.getNumOfLabelsOnSample(codeSamples[currentLabelingResultIndex].index);
         const defaultGeneratedColors = generateColorForLabels(numOfLabels);
 
         setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
-    }, [codeSamples, currentSampleIndex, labelingProvider]);
+    }, [codeSamples, currentLabelingResultIndex, labelingProvider, sampleExists]);
 
     const setLabelOfCodeTokens = useCallback((label: number) => {
         setLabelOfTokens(
-            currentSampleIndex,
+            currentLabelingResultIndex,
             codeGroup,
             label,
             selectedCodeTokens,
@@ -777,11 +820,11 @@ export function Feature() {
             codeSamples,
             setCodeSamples
         );
-    }, [currentSampleIndex, selectedCodeTokens, codeSamples, labelingProvider]);
+    }, [currentLabelingResultIndex, selectedCodeTokens, codeSamples, labelingProvider]);
 
     const setLabelOfCommentTokens = useCallback((label: number) => {
         setLabelOfTokens(
-            currentSampleIndex,
+            currentLabelingResultIndex,
             commentGroup,
             label,
             selectedCommentTokens,      // TODO can we decouple "code and comment" to any multiple groups?
@@ -789,7 +832,7 @@ export function Feature() {
             commentSamples,
             setCommentSamples
         );
-    }, [currentSampleIndex, selectedCommentTokens, commentSamples, labelingProvider]);
+    }, [currentLabelingResultIndex, selectedCommentTokens, commentSamples, labelingProvider]);
 
     const clickLabelCallback = (label: number) => {
         if (selectedCodeTokens.length > 0) {
@@ -800,32 +843,99 @@ export function Feature() {
         }
     };
 
-    // A test function of fetch
     const loadFileCallback = useCallback(() => {
-        fetch(`/mock/${demoLabelingFilePath}`)
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error('Cannot fetch labeling file');
-                }
+        // TODO optimization, don't load full/all samples into memory
+        (async () => {
+            const labelingData = await fetch(`/mock/${demoLabelingFilePath}`)
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error('Cannot fetch labeling file');
+                    }
 
-                return response.text();
-            })
-            .then((data) => {
-                labelingProvider.load(data);
-                setLabelingProvider(labelingProvider.copy());
-                updateLabelingProvider();
-            })
-            .catch((error) => {
-                console.error('Cannot get json:', error);
-            });
-    }, [labelingProvider, optionLocalServer, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
+                    return response.text();
+                })
+                .then((data) => {
+                    labelingProvider.load(data);
+                    setLabelingProvider(labelingProvider.copy());
+                    updateLabelingProvider();   // FIXME is this line necessary to trigger update?
+
+                    return data;
+                })
+                .catch((error) => {
+                    console.error('Cannot get json:', error);
+                });
+
+            // FIXME too long nested, too many parenthesis
+            if (labelingData !== undefined) {
+                fetchResponse(demoTrainDataFile)
+                    .then(res => {
+                        if (!res || (!res.body)) return;
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder();
+                        const result: string[] = [];
+                        let buffer = '';
+
+                        return reader.read().then(function processText({ done, value }): string[] | Promise<string[]> {
+                            if (done) {
+                                if (buffer) {
+                                    result.push(buffer);
+                                }
+                                return result;
+                            }
+
+                            const text = buffer + decoder.decode(value, { stream: true });
+                            const lines = text.split('\n');
+                            buffer = lines.pop() || ''; // Store incomplete line in buffer
+                            result.push(...lines);
+
+                            return reader.read().then(processText);
+                        });
+
+                    })
+                    .then(textData => {
+                        if (textData === undefined) return;
+                        const data = textData.map((line) => JSON.parse(line.trim()));
+
+                        fetchResponse(demoCompleteCodeTokensFile)
+                            .then(res => {
+                                if (res) return res.json();
+                            })
+                            .then(codeTokenLists => {
+                                setCodeSamples(labelingProvider.getSampleIndices().map((i: number) => {
+                                    return {
+                                        index: i,
+                                        text: data[i]['code'],
+                                        tokens: codeTokenLists[i],
+                                        labelingRanges: labelingProvider.getTokensOnGroup(i, codeGroup) ?? []
+                                    };
+                                }));
+                            });
+                        fetchResponse(demoCompleteCommentTokensFile)
+                            .then(res => {
+                                if (res) return res.json();
+                            })
+                            .then(commentTokenLists => {
+                                setCommentSamples(labelingProvider.getSampleIndices().map((i: number) => {
+                                    return {
+                                        index: i,
+                                        text: data[i]['docstring'],
+                                        tokens: commentTokenLists[i],
+                                        labelingRanges: labelingProvider.getTokensOnGroup(i, commentGroup) ?? []
+                                    };
+                                }));
+                            });
+                    });
+            }
+        })();
+
+    }, [labelingProvider, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
 
     // Code Area
     const codeArea = (sample: Sample, labelingRanges: number[][], labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
         return (
             <CodeBlock
-                code={sample.text}
-                tokens={sample.tokens}
+                code={sample.text ?? ''}
+                tokens={sample.tokens ?? []}
                 groupedTokenIndices={labelingRanges}
                 groupColors={labels.map((label) => label.color)}
                 onTokenSelectionChange={(s: number[]) => {
@@ -837,28 +947,34 @@ export function Feature() {
     };
 
     const codeAreaForComment = useMemo(() => {
+        if (!sampleExists()) {
+            return null;
+        }
         return codeArea(
-            commentSamples[currentSampleIndex],
-            labelingProvider.getTokensOnGroup(codeSamples[currentSampleIndex].index, commentGroup) ?? [],
+            commentSamples[currentLabelingResultIndex],
+            labelingProvider.getTokensOnGroup(commentSamples[currentLabelingResultIndex].index, commentGroup) ?? [],
             labels,
             setSelectedCommentTokens
         );
-    }, [codeSamples, commentSamples, currentSampleIndex, labels, labelingProvider]);
+    }, [sampleExists, commentSamples, currentLabelingResultIndex, labelingProvider, labels]);
 
     const codeAreaForCode = useMemo(() => {
+        if (!sampleExists()) {
+            return null;
+        }
         return codeArea(
-            codeSamples[currentSampleIndex],
-            labelingProvider.getTokensOnGroup(codeSamples[currentSampleIndex].index, codeGroup) ?? [],
+            codeSamples[currentLabelingResultIndex],
+            labelingProvider.getTokensOnGroup(codeSamples[currentLabelingResultIndex].index, codeGroup) ?? [],
             labels,
             setSelectedCodeTokens
         );
-    }, [codeSamples, currentSampleIndex, labels, labelingProvider]);
+    }, [sampleExists, codeSamples, currentLabelingResultIndex, labelingProvider, labels]);
 
     // Data Loading
     useEffect(() => {
         // Set up labels and colors
         updateLabelingProvider();
-    }, [currentSampleIndex, updateLabelingProvider]);   // FIXME why should we call again here, after rendering all the code?
+    }, [currentLabelingResultIndex, updateLabelingProvider]);   // FIXME why should we call again here, after rendering all the code?
 
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
@@ -889,10 +1005,11 @@ export function Feature() {
             </Group>
             <Space h='md'></Space>
             <Center>
-                <NumberNavigationProps
-                    value={currentSampleIndex}
-                    total={demoCommentSamples.length}
+                <NumberNavigation
+                    value={currentLabelingResultIndex}
+                    total={labelingProvider.getSampleIndices().length}
                     onChangeValue={setCurrentSampleIndex}
+                    tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
                 />
             </Center>
             <Center>
