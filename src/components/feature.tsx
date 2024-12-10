@@ -7,7 +7,7 @@ import { parser } from 'stream-json';
 import { useCookie } from 'react-use';
 
 const demoFileServer = 'http://localhost:8080';
-const demoResultsDirectory = '/home/yuhuan/projects/cophi/vis-feat-proto/auto_labelling/';
+const demoResultsDirectory = '';
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
 const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
 const demoTrainDataFile = 'train.jsonl';
@@ -161,7 +161,7 @@ class LabelingProvider {
             return [idx, parsedRanges];
         } catch (error) {
             console.error('Cannot parse json line: ', error);
-            return undefined;
+            throw error;
         }
     }
 
@@ -594,9 +594,9 @@ function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigatio
     const endIndex = Math.min(startIndex + numOfOptions, total);
 
     const isFirstPage = page == 0;
-    const isLastPage = page == totalPages - 1;
+    const isLastPage = page >= totalPages - 1;
 
-    const isSelected = (i: number) => value % 10 === i;
+    const isSelected = (i: number) => value % numOfOptions === i;
 
     const prevPageValue = Math.max(value - numOfOptions, 0);
     const nextPageValue = Math.min(value + numOfOptions, total - 1);
@@ -900,7 +900,7 @@ export function Feature() {
     // Navigation
     const [currentLabelingResultIndex, setCurrentSampleIndex] = useState(0);     // !! THIS IS the index from all labeling results !!
     // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
-    const [goToIndex, setGoToIndex] = useState<string | number>('0');
+    const [goToIndex, setGoToIndex] = useState<string | number>(0);
     const [goToIndexError, setGoToIndexError] = useState<boolean>(false);
 
     const handleGoTo = () => {
@@ -1012,6 +1012,7 @@ export function Feature() {
                 })
                 .catch((error) => {
                     console.error('Cannot get json:', error);
+                    setLoaderOpened(false);
                 });
 
             // FIXME too long nested, too many parenthesis
@@ -1185,6 +1186,7 @@ export function Feature() {
                         </Button>
                         <NumberInput
                             value={goToIndex}
+                            min={0}
                             onChange={(value) => setGoToIndex(value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
@@ -1262,6 +1264,7 @@ export function Feature() {
                         </code>
                     </ScrollArea>
                 </pre>
+                <Space h='sm'/>
                 <Button
                     onClick={() => {
                         navigator.clipboard.writeText(dumpedString);
