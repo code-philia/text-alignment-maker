@@ -77,7 +77,9 @@ class Ranges {
                 end = indices[i];
             }
         }
-        ranges.push(start, end);
+        if (start !== undefined && end !== undefined) {     // FIXME Written too many code to guarantee the structure of output (number[label][2][2 * range]). Write less or add test.
+            ranges.push(start, end);
+        }
 
         return new Ranges(ranges);
     }
@@ -91,7 +93,7 @@ function matchToIndices(match: number[][][]): number[][][] {
 
 function indicesToMatch(indices: number[][][]): number[][][] {
     return indices.map(
-        (label) => label.map((group) => Ranges.reduceFrom(group).value)
+        (label) => label.map((group) => group ? Ranges.reduceFrom(group).value : [])
     );
 }
 
@@ -105,13 +107,13 @@ type LabelingProviderOptions = {
 };
 
 class LabelingProvider {
-    private indicesOfEachSampleByLabelByGroup: Map<number, number[][][]> = new Map();
+    private sampleLabelGroupIndices: Map<number, number[][][]> = new Map();
     private onSave?: (dumped: string) => void;
 
     // suppose the first group is comment and the second group is code
     constructor({ indicesMap, content, onSave }: LabelingProviderOptions) {
         if (indicesMap) {
-            this.indicesOfEachSampleByLabelByGroup = indicesMap;
+            this.sampleLabelGroupIndices = indicesMap;
         } else if (content) {
             this.load(content);
         }
@@ -123,7 +125,7 @@ class LabelingProvider {
     copy() {
         return new LabelingProvider(
             {
-                indicesMap: new Map(this.indicesOfEachSampleByLabelByGroup),
+                indicesMap: new Map(this.sampleLabelGroupIndices),
                 onSave: this.onSave
             }
         );
@@ -155,27 +157,27 @@ class LabelingProvider {
     }
 
     getNumOfLabels(sample: number) {
-        return this.indicesOfEachSampleByLabelByGroup.get(sample)?.length ?? 0;
+        return this.sampleLabelGroupIndices.get(sample)?.length ?? 0;
     }
 
     getTokensOnGroupOnLabel(sample: number, group: number, label: number) {
-        return this.indicesOfEachSampleByLabelByGroup.get(sample)?.[label]?.[group];
+        return this.sampleLabelGroupIndices.get(sample)?.[label]?.[group];
     }
 
     getTokensOnGroup(sample: number, group: number) {
-        return this.indicesOfEachSampleByLabelByGroup.get(sample)?.map((label) => label[group]);
+        return this.sampleLabelGroupIndices.get(sample)?.map((label) => label[group] ?? []);
     }
 
     addTokensToLabel(sample: number, group: number, label: number, tokens: number[]) {
-        let indicesOfSample = this.indicesOfEachSampleByLabelByGroup.get(sample);
-        if (!indicesOfSample) {
-            indicesOfSample = Array.from({ length: label + 1 }, () => []);
-            this.indicesOfEachSampleByLabelByGroup.set(sample, indicesOfSample);
+        let indicesOfSample = this.sampleLabelGroupIndices.get(sample);
+        if (!indicesOfSample || indicesOfSample.length < label + 1) {    // TODO it's very difficult to guarantee the indexed element in array is not null
+            indicesOfSample = Array(label + 1).fill(0).map(() => [[], []]);
+            this.sampleLabelGroupIndices.set(sample, indicesOfSample);
         }
 
-        let indicesOfSampleOfLabel = indicesOfSample[label];
-        if (!indicesOfSampleOfLabel) {
-            indicesOfSampleOfLabel = Array.from({ length: 2 }, () => []);
+        let indicesOfSampleOfLabel = indicesOfSample[label];    // this could be an empty array, not an array of length 2!
+        if (!indicesOfSampleOfLabel || indicesOfSampleOfLabel.length < 2) {
+            indicesOfSampleOfLabel = Array(2).fill(0).map(() => []);
             indicesOfSample[label] = indicesOfSampleOfLabel;
         }
 
@@ -191,7 +193,7 @@ class LabelingProvider {
     }
 
     removeTokensOnLabel(sample: number, group: number, label: number, tokens: number[]) {
-        const indicesOfSample = this.indicesOfEachSampleByLabelByGroup.get(sample);
+        const indicesOfSample = this.sampleLabelGroupIndices.get(sample);
         if (!indicesOfSample) {
             return;
         }
@@ -236,14 +238,14 @@ class LabelingProvider {
             const parsed = this.parseSample(line);
             if (parsed) {
                 const [idx, ranges] = parsed;
-                this.indicesOfEachSampleByLabelByGroup.set(idx, ranges);
+                this.sampleLabelGroupIndices.set(idx, ranges);
             }
         });
     }
 
     save() {
         if (this.onSave) {
-            const dumped = Array.from(this.indicesOfEachSampleByLabelByGroup.entries())
+            const dumped = Array.from(this.sampleLabelGroupIndices.entries())
                 .map(([idx, indicesOfSample]) => JSON.stringify({ idx, match: indicesToMatch(indicesOfSample) }))
                 .join('\n');
 
