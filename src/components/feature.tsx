@@ -1,9 +1,7 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, TagsInput, Modal, Badge, ColorInput, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, Badge, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider } from '@mantine/core';
 import { IconArrowRight, IconArrowLeft, IconPlus, IconInfoCircle } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
-import { code_comment_labels, code_text, code_tokens, comment_text, comment_tokens } from '../sample/sample';
-import { parser } from 'stream-json';
 import { useCookie } from 'react-use';
 
 const demoFileServer = 'http://localhost:8080';
@@ -21,23 +19,6 @@ type Sample = {
     tokens: string[],
     labelingRanges: number[][];
 }
-
-const demoCommentSamples: Sample[] = [
-    {
-        index: 3864,
-        text: comment_text,
-        tokens: comment_tokens,
-        labelingRanges: []
-    }
-];
-const demoCodeSamples: Sample[] = [
-    {
-        index: 3864,
-        text: code_text,
-        tokens: code_tokens,
-        labelingRanges: []
-    }
-];
 
 class Ranges {
     value: number[];
