@@ -1,9 +1,12 @@
 import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, Badge, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider } from '@mantine/core';
-import { IconArrowRight, IconArrowLeft, IconPlus, IconInfoCircle } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IconInfoCircle } from '@tabler/icons-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { useCookie } from 'react-use';
-import { removeDocstrings, isSpecialToken, indicesToMatch, matchToIndices, findCommentEnd } from '../utils';
+import { indicesToMatch, matchToIndices } from '../utils';
+import { CodeBlock } from './CodeBlock';
+import { NumberNavigation } from './NumberNavigation';
+import { AlignmentLabels } from './AlignmentLabels';
 
 const demoResultsDirectory = '';
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
@@ -203,431 +206,6 @@ class LabelingProvider {
 }
 
 
-function generateHighlightedCode(
-    codeElement: HTMLElement,
-    originalText: string,
-    tokens: string[],
-    groupedTokenIndices: number[][]
-): HTMLElement {
-    // FIXME this should add an option, because this simply removes docstring. Some user may choose not to remove
-    originalText = removeDocstrings(originalText);
-
-    codeElement.innerHTML = "";
-
-    const tokenToLabel: Map<number, number> = new Map();
-    groupedTokenIndices.forEach((group, groupIndex) => {
-        group.forEach((index) => {
-            tokenToLabel.set(index, groupIndex);
-        });
-    });
-
-    let pos = 0;
-
-    // flush next token, if tokenIndex < 0 only text is flushed
-    const flush = (nextPos: number, length: number, tokenIndex: number) => {
-        if (nextPos > pos) {
-            const text = originalText.slice(pos, nextPos);
-            codeElement.appendChild(document.createTextNode(text));
-        }
-        pos = nextPos;
-
-        if (tokenIndex >= 0) {
-            const tokenInText = originalText.slice(pos, pos + length);
-            const span = document.createElement("span");
-
-            const labelNumber = tokenToLabel.get(tokenIndex);
-            span.classList.add(`token-${tokenIndex}`);
-            if (labelNumber !== undefined) {
-                span.classList.add(`label-${labelNumber}`);
-            }
-
-            span.textContent = tokenInText;
-            codeElement.appendChild(span);
-
-            pos += length;
-        }
-    };
-
-    // PITFALL: groupedTokenIndices is skipping special tokens
-    let indexForGroupTokens = 0;
-
-    tokens.forEach((token, i) => {
-        if (isSpecialToken(token)) return;
-
-        token = token.replace('\u0120', '');
-
-        // skip comments, to match tokens
-        // FIXME this should add an option, because this will also skip python comments in comment sample
-        const commentEnd = findCommentEnd(originalText, pos);
-
-        const nextPos = originalText.indexOf(token, commentEnd);
-        if (nextPos >= 0) {
-            flush(nextPos, token.length, indexForGroupTokens);
-        } else {
-            return;
-        }
-
-        indexForGroupTokens += 1;
-    });
-    flush(originalText.length, 0, -1);
-
-    return codeElement;
-}
-
-function mouseEventLiesIn(e: MouseEvent, ...targetSpans: HTMLElement[]) {
-    return e.target instanceof Node
-        && targetSpans.some((span) => span.contains(e.target as Node));
-}
-
-function getSelectedNodes(selection: Selection, targetNodes: Node[]) {
-    const selectedElements: Node[] = [];
-
-    for (let i = 0; i < selection.rangeCount; i++) {
-        const range = selection.getRangeAt(i);
-        const startContainer = range.startContainer;
-        const endContainer = range.endContainer;
-
-        const startSpan = targetNodes.find((span) => span.contains(startContainer));
-        const endSpan = targetNodes.find((span) => span.contains(endContainer));
-
-        if (!(startSpan || endSpan)) return;
-
-        const _startIndex = (startSpan && targetNodes.indexOf(startSpan)) ?? 0;
-        const startIndex = _startIndex < 0 ? 0 : _startIndex;                   // If startSpan is not found? Will that happen?
-
-        const _endIndex = (endSpan && targetNodes.indexOf(endSpan)) ?? targetNodes.length - 1;
-        const endIndex = _endIndex < 0 ? targetNodes.length - 1 : _endIndex;    // If endSpan is not found? Will that happen?
-
-        selectedElements.push(...targetNodes.slice(startIndex, endIndex + 1));
-    }
-
-    return selectedElements;
-}
-
-function expandSelectedRanges(selection: Selection, targetSpans: HTMLElement[]) {
-    for (let i = 0; i < selection.rangeCount; i++) {
-        const range = selection.getRangeAt(i);
-        const startContainer = range.startContainer;
-        const endContainer = range.endContainer;
-
-        const startSpan = targetSpans.find((span) => span.contains(startContainer));
-        const endSpan = targetSpans.find((span) => span.contains(endContainer));
-
-        if (startSpan && endSpan) {
-            selection.removeRange(range);
-            range.setStart(startSpan, 0);
-            range.setEnd(endSpan, endSpan.childNodes.length);
-
-            selection.addRange(range);
-        }
-    }
-}
-
-const tokenIndexPrefix = 'token-';
-const labelPrefix = 'label-';
-
-function getFollowingNumber(cls: string, prefix: string) {
-    if (cls.startsWith(prefix)) {
-        const labelNumber = parseInt(cls.slice(prefix.length));
-        if (!isNaN(labelNumber)) {
-            return labelNumber;
-        }
-    }
-    return undefined;
-};
-function getNumberOfElement(element: HTMLElement, prefix: string) {
-    for (const cls of element.classList) {
-        const labelNumber = getFollowingNumber(cls, prefix);
-        if (labelNumber !== undefined) {
-            return labelNumber;
-        }
-    }
-    return undefined;
-};
-function processSelectionEvents(code: HTMLElement, onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) {
-
-    // deal with selected spans style changing
-    const onWindowSelectionChange = () => {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-            const selectedElements = new Set(getSelectedNodes(selection, Array.from(code.childNodes)));
-
-            const selectedTokenIndices: number[] = [];
-            code.querySelectorAll('span').forEach((span) => {
-                if (selectedElements.has(span)) {
-                    const tokenIndex = getFollowingNumber(span.classList[0], tokenIndexPrefix);
-                    if (tokenIndex !== undefined) {
-                        selectedTokenIndices.push(tokenIndex);
-                    }
-
-                    span.classList.add('selected');
-                } else {
-                    span.classList.remove('selected');
-                }
-            });
-
-            onTokenSelectionChange?.(selectedTokenIndices);
-        } else {
-            code.querySelectorAll('span').forEach((span) => {
-                span.classList.remove('selected');
-            });
-
-            onTokenSelectionChange?.([]);
-        }
-    };
-    document.addEventListener('selectionchange', onWindowSelectionChange);
-
-    // deal with focus and unfocus
-    // let focused = false;
-
-    // const onWindowMouseDown = (e: MouseEvent) => {
-    //     if (!mouseEventLiesIn(e, ...targetSpans)) {
-    //         focused = false;
-    //         targetSpans.forEach((span) => {
-    //             span.classList.remove('selected');
-    //         });
-
-    //         onTokenSelectionChange?.([]);
-    //     }
-    // };
-    // window.addEventListener('mousedown', onWindowMouseDown);
-
-    // detail: all the range of the covered spans are selected
-    const onWindowMouseUp = () => {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-            expandSelectedRanges(selection, Array.from(code.querySelectorAll('span')));
-        }
-    };
-    window.addEventListener('mouseup', onWindowMouseUp);
-
-    // const onEachSpanMouseDown = () => {
-    //     focused = true;
-    // };
-    // targetSpans.forEach((span) => {
-    //     span.addEventListener('mousedown', onEachSpanMouseDown);
-    // });
-
-    return () => {
-        document.removeEventListener('selectionchange', onWindowSelectionChange);
-        window.removeEventListener('mouseup', onWindowMouseUp);
-    };
-}
-
-const getMantineColor = (colorLiteral: string) => {
-    return `var(--mantine-color-${colorLiteral}-filled)`;
-};
-function processTokens(code: HTMLElement, groupColors: string[]) {
-    const targetSpans: HTMLElement[] = [];
-
-    code.childNodes.forEach((node) => {
-        if (node instanceof HTMLSpanElement){
-            targetSpans.push(node);
-        }
-    });
-
-    targetSpans.forEach((span) => {
-        const labelNumber = getNumberOfElement(span, labelPrefix);
-        if (labelNumber !== undefined) {
-            span.style.color = getMantineColor(groupColors[labelNumber]);
-        }
-    });
-}
-
-type CodeBlockProps = {
-    code: string;
-    tokens: string[];
-    groupedTokenIndices: number[][];
-    groupColors: string[];
-    onTokenSelectionChange?: (selectedTokenIndices: number[]) => void;
-};
-
-function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, onTokenSelectionChange }: CodeBlockProps) {
-    const codeRef = useRef<HTMLPreElement>(null);
-
-    useEffect(() => {
-        if (codeRef.current) {
-            generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices);
-            processTokens(codeRef.current, groupColors);
-            return processSelectionEvents(codeRef.current, onTokenSelectionChange);
-        }
-    }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);
-
-    return (
-        <pre className='target-code-pre'>
-            <ScrollArea w={400} h={300}>
-                <code ref={codeRef}>
-                    {code}
-                </code>
-            </ScrollArea>
-        </pre>
-    );
-}
-
-type NumberNavigationProps = {
-    value: number;
-    total: number;
-    onChangeValue: (i: number) => void;
-    tags?: string[];
-}
-
-function NumberNavigation({ value, total, onChangeValue, tags }: NumberNavigationProps) {
-    const numOfOptions = 8;
-
-    const page = Math.floor(value / numOfOptions);
-    const totalPages = Math.ceil(total / numOfOptions);
-
-    const startIndex = page * numOfOptions;
-    const endIndex = Math.min(startIndex + numOfOptions, total);
-
-    const isFirstPage = page == 0;
-    const isLastPage = page >= totalPages - 1;
-
-    const isSelected = (i: number) => value % numOfOptions === i;
-
-    const prevPageValue = Math.max(value - numOfOptions, 0);
-    const nextPageValue = Math.min(value + numOfOptions, total - 1);
-
-    return (
-        <Group gap='3'>
-            <Button
-                className='number-navigation-button'
-                variant='transparent'
-                color='gray'
-                disabled={isFirstPage}
-                onClick={() => onChangeValue(prevPageValue)}
-            >
-                <IconArrowLeft />
-            </Button>
-            {new Array(endIndex - startIndex).fill(0).map((_, i) => (
-                <Button
-                    key={i + 1}
-                    className='number-navigation-button'
-                    variant={ isSelected(i) ? 'filled' : 'transparent' }
-                    color={ isSelected(i) ? 'blue' : 'gray' }
-                    onClick={() => onChangeValue(startIndex + i)}
-                >
-                    {tags ? tags[startIndex + i] : (startIndex + i + 1)}
-                </Button>
-            ))}
-            <Button
-                className='number-navigation-button'
-                variant='transparent'
-                color='gray'
-                disabled={isLastPage}
-                onClick={() => onChangeValue(nextPageValue)}
-            >
-                <IconArrowRight />
-            </Button>
-        </Group>
-    );
-}
-
-type AlignmentLabel = {
-    text: string;
-    color: string;
-};
-
-type AlignmentLabelsProps = {
-    labels: AlignmentLabel[];
-    setLabels: (labels: AlignmentLabel[]) => void;
-    onClickLabel?: (index: number) => void;
-}
-
-function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsProps) {
-    const [newLabelText, setNewLabelText] = useState('');
-    const [newLabelColor, setNewLabelColor] = useState('#000000');  // FIXME just a placeholder now, not changeable
-    const [modalOpened, setModalOpened] = useState(false);
-
-    const addLabel = () => {
-        if (newLabelText.trim()) {
-            setLabels([...labels, { text: newLabelText, color: newLabelColor }]);
-            setNewLabelText('');
-            setNewLabelColor('#000000');
-            setModalOpened(false);
-        }
-    };
-
-    return (
-        <>
-            <div style={{ padding: '20px' }}>
-                <Group gap="sm">
-                    {
-                        labels.length > 0
-                            ?
-                            <Badge
-                                color='black'
-                                className='label-badge remove-label'
-                                onMouseDown={() => onClickLabel?.(-1)}
-                            >
-                                Remove Label
-                            </Badge>
-                            :
-                            <Badge
-                                color='black'
-                                className='label-badge remove-label'
-                            >
-                                No Labels Yet
-                            </Badge>
-                    }
-                    {labels.map((label, index) => (
-                        <Badge
-                            key={index}
-                            color={label.color}
-                            variant="filled"
-                            className='label-badge'
-                            onMouseDown={() => onClickLabel?.(index)}
-                        >
-                            {label.text}
-                        </Badge>
-                    ))}
-                    {
-                        labels.length > 0
-                            ?
-                            <Badge
-                                leftSection={<IconPlus style={{ width: rem(12), height: rem(12) }} />}
-                                color='gray'
-                                className='label-badge add-label'
-                                onClick={() => {
-                                    setNewLabelText(`Label ${labels.length + 1}`);   // FIXME this should use a same function as the setLabels function creating labels below
-                                    setModalOpened(true);
-                                }}
-                            >
-                                New
-                            </Badge>
-                            :
-                            null
-                    }
-                </Group>
-
-            </div>
-            <Modal
-                opened={modalOpened}
-                onClose={() => setModalOpened(false)}
-                title="Add New Label"
-                size="sm" // Ensures the modal fits the screen better
-            >
-                <TextInput
-                    label="Label Text"
-                    placeholder="Enter label text"
-                    value={newLabelText}
-                    onChange={(event) => setNewLabelText(event.target.value)}
-                />
-                {/* <ColorInput
-                    label="Label Color"
-                    placeholder="Pick a color"
-                    value={newLabelColor}
-                    onChange={(value) => setNewLabelColor(value)}
-                    style={{ marginTop: '15px' }}
-                /> */}
-                <Group align="right" style={{ marginTop: '20px' }}>
-                    <Button onClick={addLabel}>Add</Button>
-                </Group>
-            </Modal>
-        </>
-    );
-};
-
 const standardColors: MantineColor[] = ['blue', 'green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
 function generateColorForLabelIndex(index: number) {
     return standardColors[index % standardColors.length];
@@ -640,7 +218,7 @@ function generateColorForLabels(num: number) {
     return colors;
 }
 
-type Label = {
+type DisplayedLabel = {
     text: string;
     color: string;
 }
@@ -773,11 +351,11 @@ export function Feature() {
     }, [codeSamples, currentIndex]);
 
     // Labeling
-    const [labels, setLabels] = useState<Label[]>([]);
+    const [labels, setLabels] = useState<DisplayedLabel[]>([]);
     const [selectedCodeTokens, setSelectedCodeTokens] = useState<number[]>([]);
     const [selectedCommentTokens, setSelectedCommentTokens] = useState<number[]>([]);
 
-    const setLabelsWithDefaultColor = (labels: Label[]) => {
+    const setLabelsWithDefaultColor = (labels: DisplayedLabel[]) => {
         // FIXME should avoid modifying the original object, everywhere?
         labels.forEach((label, i) => {
             label.color = generateColorForLabelIndex(i);
@@ -912,7 +490,7 @@ export function Feature() {
     }, [labelingProvider, optionTokensDirectory, setCookieTokensDirectory, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
 
     // Code Area
-    const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
+    const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: DisplayedLabel[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
         return (
             <CodeBlock
                 code={sample.text ?? ''}
