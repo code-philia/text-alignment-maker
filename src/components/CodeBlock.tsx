@@ -1,7 +1,6 @@
 import { ScrollArea } from '@mantine/core';
 import { useRef, useEffect } from 'react';
 import { removeDocstrings, isSpecialToken, findCommentEnd } from '../utils';
-import { undefined } from './feature';
 
 // code block
 function generateHighlightedCode(
