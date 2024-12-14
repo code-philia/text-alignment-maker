@@ -3,8 +3,8 @@ import { IconArrowRight, IconArrowLeft, IconPlus, IconInfoCircle } from '@tabler
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { useCookie } from 'react-use';
+import { removeDocstrings, isSpecialToken, indicesToMatch, matchToIndices, findCommentEnd } from '../utils';
 
-const demoFileServer = 'http://localhost:8080';
 const demoResultsDirectory = '';
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
 const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
@@ -13,72 +13,11 @@ const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
 
 // const lorem = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
 
-type Sample = {
+type LabeledTextSample = {
     index: number,
     text: string,
     tokens: string[],
     labelingRanges: number[][];
-}
-
-class Ranges {
-    value: number[];
-
-    constructor(value: number[]) {
-        this.value = value;
-    }
-
-    expand() {
-        const indices = [];
-        const ranges = this.value;
-
-        for (let i = 0; i < ranges.length; i += 2) {
-            if (i + 1 >= ranges.length) break;
-
-            for (let j = ranges[i]; j <= ranges[i + 1]; ++j) {
-                indices.push(j);
-            }
-        }
-
-        return indices;
-    }
-
-    static reduceFrom(indices: number[]): Ranges {
-        // make indices sorted
-        indices.sort((a, b) => a - b);
-
-        const ranges: number[] = [];
-
-        let start = indices[0];
-        let end = indices[0];
-        for (let i = 1; i < indices.length; ++i) {
-            if (indices[i] <= end + 1) {
-                if (indices[i] == end + 1) {
-                    end = indices[i];
-                }
-            } else {
-                ranges.push(start, end);
-                start = indices[i];
-                end = indices[i];
-            }
-        }
-        if (start !== undefined && end !== undefined) {     // FIXME Written too many code to guarantee the structure of output (number[label][2][2 * range]). Write less or add test.
-            ranges.push(start, end);
-        }
-
-        return new Ranges(ranges);
-    }
-}
-
-function matchToIndices(match: number[][][]): number[][][] {
-    return match.map(
-        (label) => label.map((group) => new Ranges(group).expand())
-    );
-}
-
-function indicesToMatch(indices: number[][][]): number[][][] {
-    return indices.map(
-        (label) => label.map((group) => group ? Ranges.reduceFrom(group).value : [])
-    );
 }
 
 const commentGroup = 0;
@@ -263,39 +202,6 @@ class LabelingProvider {
     }
 }
 
-// the only way to use this OOP data processing center is to customize a hook
-// function useLabelingProvider() {
-//     const LabelingProvider =
-//     const { provider, setProvider } = useState();
-
-//     return { remove, getTokensOnGroup }
-// }
-
-function isSpecialToken(token: string) {
-    return token.startsWith('<') && token.endsWith('>');
-}
-
-function removeDocstrings(code: string): string {
-    code = code.replace(/""".*?"""/gs, '');
-    code = code.replace(/'''.*?'''/gs, '');
-    return code;
-}
-
-function findCommentEnd(s: string, pos: number): number {
-    let i = pos;
-
-    while (i < s.length && /\s/.test(s[i])) {
-        i++;
-    }
-
-    if (s[i] === '#') {
-        while (i < s.length && s[i] !== '\n') {
-            i++;
-        }
-    }
-
-    return i;
-}
 
 function generateHighlightedCode(
     codeElement: HTMLElement,
@@ -654,7 +560,7 @@ function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentLabelsPr
                                 className='label-badge remove-label'
                                 onMouseDown={() => onClickLabel?.(-1)}
                             >
-                                No Label
+                                Remove Label
                             </Badge>
                             :
                             <Badge
@@ -739,7 +645,7 @@ type Label = {
     color: string;
 }
 
-function setLabelOfTokens(sampleIndex: number, group: number, label: number, tokens: number[], provider: LabelingProvider, samples: Sample[], setSamples: (s: Sample[]) => void) {
+function setLabelOfTokens(sampleIndex: number, group: number, label: number, tokens: number[], provider: LabelingProvider, samples: LabeledTextSample[], setSamples: (s: LabeledTextSample[]) => void) {
     const sample = samples[sampleIndex];
 
     if (label < 0) {
@@ -796,50 +702,6 @@ function readJsonLinesToList(res: Response | void): Promise<string[]> | undefine
     });
 }
 
-// function readHugeResponseToList(res: Response | void): Promise<string[][]> | undefined {
-//     if (!res || !res.body) return;
-
-//     return new Promise((resolve) => {
-//         const pipeline = res.body!
-//             .pipeThrough(new TextDecoderStream())
-//             .pipeThrough(new TransformStream({
-//                 transform(chunk, controller) {
-//                     const p = parser();
-//                     p.on('data', data => {
-//                         controller.enqueue(data.value);
-//                     });
-//                     p.write(chunk);
-//                 }
-//             }))
-//             .pipeThrough(new TransformStream({
-//                 transform(chunk, controller) {
-//                     const stream = streamArray();
-//                     stream.on('data', data => {
-//                         controller.enqueue(data.value);
-//                     });
-//                     stream.write(chunk);
-//                 }
-//             }));
-
-//         const codeTokenLists: string[][] = [];
-//         const reader = pipeline.getReader();
-
-//         const processChunks = async () => {
-//             while (true) {
-//                 const { done, value } = await reader.read();
-//                 if (done) {
-//                     resolve(codeTokenLists);
-//                     break;
-//                 }
-//                 codeTokenLists.push(value);
-//             }
-//         };
-
-//         processChunks();
-//     });
-// }
-
-
 export function Feature() {
     // Stored Options
     const [cookieTokensDirectory, setCookieTokensDirectory] = useCookie('tokens-directory');
@@ -854,11 +716,10 @@ export function Feature() {
     // Options
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
     const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
-    const [optionLocalServer, setOptionLocalServer] = useState(demoFileServer);
 
     // Data
-    const [codeSamples, setCodeSamples] = useState<Sample[]>([]);
-    const [commentSamples, setCommentSamples] = useState<Sample[]>([]);
+    const [codeSamples, setCodeSamples] = useState<LabeledTextSample[]>([]);
+    const [commentSamples, setCommentSamples] = useState<LabeledTextSample[]>([]);
 
     const [labelingProvider, setLabelingProvider] = useState(
         new LabelingProvider({
@@ -903,7 +764,7 @@ export function Feature() {
         return labelingProvider.getSampleIndices()[currentLabelingResultIndex];
     }, [currentLabelingResultIndex, labelingProvider]);
 
-    const getValidSample = (samples: Sample[], index: number): Sample | undefined => {
+    const getValidSample = (samples: LabeledTextSample[], index: number): LabeledTextSample | undefined => {
         return samples.find((sample) => sample.index === index);
     };
 
@@ -1048,10 +909,10 @@ export function Feature() {
             }
         })();
 
-    }, [labelingProvider, optionTokensDirectory, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
+    }, [labelingProvider, optionTokensDirectory, setCookieTokensDirectory, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
 
     // Code Area
-    const codeArea = (sample: Sample, labelingRanges: number[][], labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
+    const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: Label[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
         return (
             <CodeBlock
                 code={sample.text ?? ''}
