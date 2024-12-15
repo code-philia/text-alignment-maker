@@ -202,6 +202,11 @@ export function Feature() {
         return getValidSample(codeSamples, currentIndex) && getValidSample(commentSamples, currentIndex);
     }, [currentIndex, codeSamples, commentSamples]);
 
+    // TODO merge sample and raw sample together
+    const rawSampleExists = useCallback((index: number) => {
+        return getValidSample(rawCodeSamples, index) && getValidSample(rawCommentSamples, index);
+    }, [rawCodeSamples, rawCommentSamples]);
+
     // Labeling
     const [labels, setLabels] = useState<DisplayedLabel[]>([]);
     const [selectedCodeTokens, setSelectedCodeTokens] = useState<number[]>([]);
@@ -258,7 +263,29 @@ export function Feature() {
         }
     };
 
+    // TODO can we add a custom hook (to reset each state by the function returned from that hook?)
+    const resetStates = () => {
+        setRawCodeSamples([]);
+        setRawCommentSamples([]);
+        setCodeSamples([]);
+        setCommentSamples([]);
+        
+        setTeachersProvider(new TeachersRelationshipProvider({}));
+        setLabelingProvider(new LabelingProvider({
+            content: '',
+            onSave: (dumped) => {
+                setDumpedString(dumped);
+                setModalOpened(true);
+            }
+        }));
+
+        setSelectedCodeTokens([]);
+        setSelectedCommentTokens([]);
+    };
+
     const loadFileCallback = useCallback(() => {
+        resetStates();
+
         // FIXME too long, too nested ← written by Copilot
         setCookieTokensDirectory(optionTokensDirectory);
 
@@ -386,6 +413,11 @@ export function Feature() {
     };
 
     const codeAreaForRawSampleIndex = (index: number, group: number) => {
+        if (!rawSampleExists(index)) {
+            return null;
+        }
+
+        // FIXME the sample is searched for twice, should be optimized
         const sample = getValidSample(group === codeGroup ? rawCodeSamples : rawCommentSamples, index);
         return codeAreaForSample(
             sample!,
@@ -556,7 +588,7 @@ export function Feature() {
                 </Grid.Col>
             </Grid>
         )
-    }, [currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider]);
+    }, [currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
 
     const textLabelingArea = useMemo(() => (
         loaderOpened
@@ -600,53 +632,59 @@ export function Feature() {
     
     const teacherSamplesForCurrentIndex = useMemo(() => {
         return getTeacherSamples(currentIndex);
-    }, [currentIndex, getTeacherSamples]);
+    }, [currentIndex, teachersProvider, getTeacherSamples]);
 
     const teacherSamplesDisplay = useMemo(() => {
         return teacherSamplesForCurrentIndex
             ?
-            teacherSamplesForCurrentIndex.map((teacher, i) => (
-                <Container key={i} p='0'>
-                    <Stack key={i} gap='0' align='baseline' p='0.5em 0.1em'>
-                        <Title order={4} size='sm'>Teacher: {teacher.teacher_idx}</Title>
-                        <Text size='sm'>Pattern: {teacher.pattern}</Text>
-                        <Text size='sm'>Cluster: {teacher.cluster}</Text>
-                    </Stack>
-                    <Group gap='sm' justify='space-between'>
-                        {codeAreaForRawSampleIndex(teacher.teacher_idx, commentGroup)}
-                        {codeAreaForRawSampleIndex(teacher.teacher_idx, codeGroup)}
-                    </Group>
-                    <Space h='md'></Space>
-                </Container>
-            ))
+            teacherSamplesForCurrentIndex.map(
+                (teacher, i) => {
+                    const teacherSampleComment = getValidSample(rawCommentSamples, teacher.teacher_idx);
+                    const teacherSampleCode = getValidSample(rawCodeSamples, teacher.teacher_idx);
+                    if (!teacherSampleComment || !teacherSampleCode) {
+                        return null;
+                    }
+
+                    return (
+                        <Container key={i} p='0'>
+                            <Stack key={i} gap='0' align='baseline' p='0.5em 0.1em'>
+                                <Title order={4} size='sm'>Teacher: {teacher.teacher_idx}</Title>
+                                <Text size='sm'>Pattern: {teacher.pattern}</Text>
+                                <Text size='sm'>Cluster: {teacher.cluster}</Text>
+                            </Stack>
+                            <Group gap='sm' justify='space-between'>
+                                {codeAreaForRawSampleIndex(teacher.teacher_idx, commentGroup)}
+                                {codeAreaForRawSampleIndex(teacher.teacher_idx, codeGroup)}
+                            </Group>
+                            <Space h='md'></Space>
+                        </Container>
+                    );
+                }
+            )
             :
             null;
     }, [teacherSamplesForCurrentIndex, rawCodeSamples, rawCommentSamples]);
     
     const teacherSamplesArea = (
-        optionShowTeacherSamples && currentIndex
-        ?
         <>
-                <Space h='lg'></Space>
-                <Divider></Divider>
-                <Space h='lg'></Space>
-                {
-                    teacherSamplesForCurrentIndex
-                        ?
-                        <Container p='0 1em'>
-                            <Title order={4} style={{ padding: '0.3em 0' }}>Teacher Samples</Title>
-                            {teacherSamplesDisplay}
-                        </Container>
-                        :
-                        <Center h='300'>
-                            <Text c='gray'>
-                                No teacher samples
-                            </Text>
-                        </Center>
-                }
-            </>
-            :
-            null
+            <Space h='lg'></Space>
+            <Divider></Divider>
+            <Space h='lg'></Space>
+            {
+                teacherSamplesForCurrentIndex
+                    ?
+                    <Container p='0 1em'>
+                        <Title order={4} style={{ padding: '0.3em 0' }}>Teacher Samples</Title>
+                        {teacherSamplesDisplay}
+                    </Container>
+                    :
+                    <Center h='300'>
+                        <Text c='gray'>
+                            No teacher samples
+                        </Text>
+                    </Center>
+            }
+        </>
     );
 
     // const tagsArea = (
