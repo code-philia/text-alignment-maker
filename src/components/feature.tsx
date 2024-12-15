@@ -1,4 +1,4 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, AspectRatio, Popover } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
@@ -126,7 +126,7 @@ export function Feature() {
 
     // Navigation
     const [currentLabelingResultIndex, setCurrentSampleIndex] = useState(0);     // !! THIS IS the index from all labeling results !!
-    // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
+    const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
     const [goToIndex, setGoToIndex] = useState<string | number>(0);
     const [goToIndexError, setGoToIndexError] = useState<boolean>(false);
 
@@ -312,6 +312,15 @@ export function Feature() {
         );
     };
 
+    const codeAreaForSample = useCallback((sample: LabeledTextSample, group: number) => {
+        return codeArea(
+            sample!,
+            labelingProvider.getTokensOnGroup(currentIndex, codeGroup) ?? [],
+            labels,
+            setSelectedCodeTokens
+        );
+    }, [currentIndex, labelingProvider, labels]);
+
     const codeAreaForComment = useMemo(() => {
         if (!sampleExists()) {
             return null;
@@ -356,22 +365,22 @@ export function Feature() {
                     <IconInfoCircle style={{ width: rem(12), height: rem(12) }}/>
                 </Button>
             </HoverCard.Target>
-            <HoverCard.Dropdown>
+            <HoverCard.Dropdown style={{ padding: '1.5em' }}>
                 <Text size='xs'>
                     The following files are required:
                     <Space h='xs' />
-                    <List size='xs'>
+                    <List size='xs' spacing='5'>
                         <List.Item>
-                            A code tokens file <b>tokenized_code_tokens_train.jsonl</b>
+                            A code tokens file:<br/><b>{demoCompleteCodeTokensFile}</b>
                         </List.Item>
                         <List.Item>
-                            A comment tokens file <b>tokenized_comment_tokens_train.jsonl</b>
+                            A comment tokens file:<br/><b>{demoCompleteCommentTokensFile}</b>
                         </List.Item>
                         <List.Item>
-                            A Training file <b>labeling.jsonl</b> that contains code and docstring
+                            A Training file that contains code and docstring:<br/><b>{demoTrainDataFile}</b>
                         </List.Item>
                         <List.Item>
-                            A labeling result file <b>sorted_labelling_sample_api.jsonl</b>, which determines the list below
+                            A labeling result file, which as an arrya of labeling applied to a list of samples, will be shown below:<br/><b>{demoLabelingFilePath}</b>
                         </List.Item>
                     </List>
                 </Text>
@@ -379,125 +388,170 @@ export function Feature() {
         </HoverCard>
     );
 
+    const loadingOptions = (
+        <Flex align='flex-end'>
+            <TextInput
+                value={optionTokensDirectory}
+                onChange={(event) => setOptionTokensDirectory(event.currentTarget.value)}
+                label='Result directory'
+                description={<>Directory that contains original text, tokens, and labeling files{fileInfoBadge}</>}
+                style={{ flexGrow: 1 }}
+            />
+            <Space w='sm'></Space>
+            <Button onClick={loadFileCallback}>Load</Button>
+        </Flex>
+    );
+
+    const displayOptions = (
+        <Group>
+            <Checkbox
+                checked={optionOutlineTokens}
+                onChange={(event) => setOptionOutlineTokens(event.currentTarget.checked)}
+                label='Outline Tokens'
+            />
+        </Group>
+    );
+
+    const navigationRow = (currentIndex === undefined) ? null : (
+        <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
+            <Grid.Col span={2.8}>
+                <Group gap='xs' align='center'>
+                    <Popover position='bottom' withArrow shadow='md'>
+                        <Popover.Target>
+                            <Button variant='outline'>
+                                Go to index
+                            </Button>
+                        </Popover.Target>
+                        <Popover.Dropdown>
+                            <NumberInput
+                                value={goToIndex}
+                                min={0}
+                                onChange={(value) => setGoToIndex(value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
+                                        handleGoTo();
+                                    }
+                                }}
+                                error={goToIndexError}
+                                w='90'
+                                rightSection={
+                                    <Kbd w='19' h='22' p='0'>
+                                        <Center p='0'>
+                                            ↵
+                                        </Center>
+                                    </Kbd>
+                                }
+                                rightSectionWidth={34}
+                            >
+                            </NumberInput>
+                        </Popover.Dropdown>
+                    </Popover>
+                </Group>
+            </Grid.Col>
+            <Grid.Col span={6.4}>
+                <Center>
+                    <NumberNavigation
+                        value={currentLabelingResultIndex}
+                        total={labelingProvider.getSampleIndices().length}
+                        onChangeValue={setCurrentSampleIndex}
+                        tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
+                    />
+                </Center>
+            </Grid.Col>
+            <Grid.Col span={2.8}>
+                <Group justify='flex-end'>
+                    <Button
+                        w='11em'
+                        onClick={() => labelingProvider.save()}
+                    >
+                        Save Labeling
+                    </Button>
+                </Group>
+            </Grid.Col>
+        </Grid>
+    );
+
+    const textLabelingArea = (
+        loaderOpened
+            ?
+            <Center h='300'>
+                <Stack align='center' gap='xs'>
+                    <Text c='blue'>Loading Tokens...</Text>
+                    <Loader size='lg' color='blue' type='dots'/>
+                </Stack>
+            </Center>
+            :
+        currentIndex
+            ?
+            <Container>
+                <Center>
+                    <AlignmentLabels
+                        labels={labels}
+                        setLabels={setLabelsWithDefaultColor}
+                        onClickLabel={clickLabelCallback}
+                    />
+                </Center>
+                <Title order={4} style={{ padding: '0.3em 2em' }}>Sample: {currentIndex}</Title>
+                <Group gap='sm' justify='center'>
+                    {codeAreaForComment}
+                    {codeAreaForCode}
+                </Group>
+            </Container>
+            :
+            <Center h='300'>
+                <Text c='gray'>
+                    No instance is loaded
+                </Text>
+            </Center>
+    );
+
+    // const tagsArea = (
+    //     <TagsInput
+    //         value={selectedIndices}
+    //         onChange={searchSampleCallback}
+    //         label='Selected Samples'
+    //         clearable
+    //     >
+    //     </TagsInput>
+    // });
+    
+    const saveLabelingModal = (
+        <Modal
+            opened={modalOpened}
+            onClose={() => setModalOpened(false)}
+            title="Dumped String"
+            size="lg"
+        >
+            <pre style={{ overflow: 'hidden' }}>
+                <ScrollArea >
+                    <code>
+                        {dumpedString}
+                    </code>
+                </ScrollArea>
+            </pre>
+            <Space h='sm' />
+            <Button
+                onClick={() => {
+                    navigator.clipboard.writeText(dumpedString);
+                    setModalOpened(false);
+                }}
+            >Copy</Button>
+        </Modal>
+    );
+
     return (
         <div className={className} style={{ width: '960px' }}>
-            <Flex align='flex-end'>
-                <TextInput
-                    value={optionTokensDirectory}
-                    onChange={(event) => setOptionTokensDirectory(event.currentTarget.value)}
-                    label='Result directory'
-                    description={<>Directory that contains original text, tokens, and labeling files{fileInfoBadge}</>}
-                    style={{ flexGrow: 1 }}
-                />
-                <Space w='sm'></Space>
-                <Button onClick={loadFileCallback}>Load</Button>
-            </Flex>
+            { loadingOptions }
             <Space h='sm'></Space>
-            <Group>
-                <Checkbox
-                    checked={optionOutlineTokens}
-                    onChange={(event) => setOptionOutlineTokens(event.currentTarget.checked)}
-                    label='Outline Tokens'
-                />
-
-            </Group>
+            { displayOptions }
             <Space h='md'></Space>
-            <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
-                <Grid.Col span={2.8}>
-                    <Group gap='xs' align='center'>
-                        <Button
-                            onClick={handleGoTo}
-                        >
-                            Go to
-                        </Button>
-                        <NumberInput
-                            value={goToIndex}
-                            min={0}
-                            onChange={(value) => setGoToIndex(value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
-                                    handleGoTo();
-                                }
-                            }}
-                            error={goToIndexError}
-                            w='90'
-                        >
-                        </NumberInput>
-                    </Group>
-                </Grid.Col>
-                <Grid.Col span={6.4}>
-                    <Center>
-                        <NumberNavigation
-                            value={currentLabelingResultIndex}
-                            total={labelingProvider.getSampleIndices().length}
-                            onChangeValue={setCurrentSampleIndex}
-                            tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
-                        />
-                    </Center>
-                </Grid.Col>
-                <Grid.Col span={2.8}>
-                    <Group justify='flex-end'>
-                        <Button
-                            w='11em'
-                            onClick={() => labelingProvider.save()}
-                        >
-                            Save Labeling
-                        </Button>
-                    </Group>
-                </Grid.Col>
-            </Grid>
-            <Space h='lg' />
             <Divider />
-            <Center>
-                <AlignmentLabels
-                    labels={labels}
-                    setLabels={setLabelsWithDefaultColor}
-                    onClickLabel={clickLabelCallback}
-                />
-            </Center>
-            {
-                loaderOpened
-                    ?
-                    <Center h='300'>
-                        <Stack align='center' gap='xs'>
-                            <Text c='blue'>Loading Tokens...</Text>
-                            <Loader size='lg' color='blue' type='dots'/>
-                        </Stack>
-                    </Center>
-                    :
-                    <Group gap='sm' justify='center'>
-                        {codeAreaForComment}
-                        {codeAreaForCode}
-                    </Group>
-            }
-            {/* <TagsInput
-                value={selectedIndices}
-                onChange={searchSampleCallback}
-                label='Selected Samples'
-                clearable
-            >
-            </TagsInput> */}
-            <Modal
-                opened={modalOpened}
-                onClose={() => setModalOpened(false)}
-                title="Dumped String"
-                size="lg"
-            >
-                <pre style={{ overflow: 'hidden' }}>
-                    <ScrollArea >
-                        <code>
-                            {dumpedString}
-                        </code>
-                    </ScrollArea>
-                </pre>
-                <Space h='sm'/>
-                <Button
-                    onClick={() => {
-                        navigator.clipboard.writeText(dumpedString);
-                        setModalOpened(false);
-                    }}
-                >Copy</Button>
-            </Modal>
+            <Space h='md'></Space>
+            { navigationRow }
+            <Space h='lg'></Space>
+            { textLabelingArea }
+            
+            { saveLabelingModal }
         </div>
     );
 }
