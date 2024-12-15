@@ -18,7 +18,13 @@ code {
 
 .target-code-pre {
   text-wrap: wrap;
+  word-break: break-all;
+
   line-height: 1.1em;
+  
+  flex: 1;
+  min-width: 0;
+  padding: 0;
 }
 
 .target-code-pre code {

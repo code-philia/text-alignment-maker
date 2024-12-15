@@ -245,8 +245,8 @@ export function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, onTo
     }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);
 
     return (
-        <pre className='target-code-pre' style={{ flex: '1' }}>
-            <ScrollArea h={300}>
+        <pre className='target-code-pre'>
+            <ScrollArea h={300} p='1em'>
                 <code ref={codeRef}>
                     {code}
                 </code>
