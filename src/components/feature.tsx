@@ -458,7 +458,7 @@ export function Feature() {
     const className = classList.join(' ');
 
     const fileInfoBadge = (
-        <HoverCard width={300} position="right" shadow="md">
+        <HoverCard width={300} position="right" shadow="md" offset={{ crossAxis: 80 }}>
             <HoverCard.Target>
                 <Button variant='transparent' size='compact-xs' style={{ padding: '3px', cursor: 'unset'}}>
                     <IconInfoCircle style={{ width: rem(12), height: rem(12) }}/>
