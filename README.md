@@ -4,7 +4,25 @@
 
 ## How to Run
 
-This tool is still experimental.
+> [!NOTE]
+> This tool is still experimental.
+
+### For Quicker Starting
+
+First build the project for one time:
+
+```
+pnpm i
+pnpx vite build
+```
+
+Then:
+
+```
+node server.js
+```
+
+### For Development
 
 ```
 pnpm i
