@@ -92,18 +92,51 @@ function readJsonLinesToList(res: Response | void): Promise<string[]> | undefine
 export function Feature() {
     // Stored Options
     const [cookieTokensDirectory, setCookieTokensDirectory] = useCookie('tokens-directory');
-
+    const [cookieOutlineTokens, setCookieOutlineTokens] = useCookie('outline-tokens');
+    const [cookieShowTeacherSamples, setCookieShowTeacherSamples] = useCookie('show-teacher-samples');
+    
     // Cookie Loading
+    const firstLoaded = useRef(true);
+
+    // TODO don't use so many useEffect, and even both at cookie-end and real-prop-end
     useEffect(() => {
-        if (cookieTokensDirectory) {
+        if (firstLoaded.current && cookieTokensDirectory) {
             setOptionTokensDirectory(cookieTokensDirectory);
         }
-    }, [cookieTokensDirectory]);
+    }, [cookieTokensDirectory]);    // TODO should this array be empty?
+    useEffect(() => {
+        if (firstLoaded.current && cookieOutlineTokens) {
+            setOptionOutlineTokens(cookieOutlineTokens === 'true');
+        }
+    }, [cookieOutlineTokens]);
+    useEffect(() => {
+        if (firstLoaded.current && cookieShowTeacherSamples) {
+            setOptionShowTeacherSamples(cookieShowTeacherSamples === 'true');
+        }
+    }, [cookieShowTeacherSamples]);
+
+    useEffect(() => {
+        if (firstLoaded.current) {
+            firstLoaded.current = false;
+        }
+    });
 
     // Options
     const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
     const [optionShowTeacherSamples, setOptionShowTeacherSamples] = useState(false);
+
+    useEffect(() => {
+        if (!firstLoaded.current) {
+            setCookieOutlineTokens(optionOutlineTokens.toString());
+        }
+    }, [optionOutlineTokens]);
+
+    useEffect(() => {
+        if (!firstLoaded.current) {
+            setCookieShowTeacherSamples(optionShowTeacherSamples.toString());
+        }
+    }, [optionShowTeacherSamples]);
 
     // Data
     const [rawCodeSamples, setRawCodeSamples] = useState<LabeledTextSample[]>([]);
@@ -138,6 +171,8 @@ export function Feature() {
     // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
     const [goToIndex, setGoToIndex] = useState<string | number>(0);
     const [goToIndexError, setGoToIndexError] = useState<boolean>(false);
+
+    const goToInput = useRef<HTMLInputElement>(null);
 
     const handleGoTo = () => {
         if (!(typeof goToIndex === 'number')) return;
@@ -428,6 +463,13 @@ export function Feature() {
                 label='Result directory'
                 description={<>Directory that contains original text, tokens, and labeling files{fileInfoBadge}</>}
                 style={{ flexGrow: 1 }}
+                onKeyDown={
+                    (e) => {
+                        if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
+                            loadFileCallback();
+                        }
+                    }
+                }
             />
             <Space w='sm'></Space>
             <Button onClick={loadFileCallback}>Load</Button>
@@ -454,14 +496,19 @@ export function Feature() {
             <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
                 <Grid.Col span={2.8}>
                     <Group gap='xs' align='center'>
-                        <Popover position='bottom' withArrow shadow='md'>
+                        <Popover
+                            position='bottom'
+                            withArrow shadow='md'
+                            trapFocus
+                        >
                             <Popover.Target>
-                                <Button variant='outline'>
+                                <Button>
                                     Go to index
                                 </Button>
                             </Popover.Target>
                             <Popover.Dropdown>
                                 <NumberInput
+                                    ref={goToInput}
                                     value={goToIndex}
                                     min={0}
                                     onChange={(value) => setGoToIndex(value)}
@@ -480,6 +527,7 @@ export function Feature() {
                                         </Kbd>
                                     }
                                     rightSectionWidth={34}
+                                    onFocus={() => { goToInput.current?.select(); }}
                                 >
                                 </NumberInput>
                             </Popover.Dropdown>
@@ -618,8 +666,8 @@ export function Feature() {
             title="Dumped String"
             size="lg"
         >
-            <pre style={{ overflow: 'hidden' }}>
-                <ScrollArea >
+            <pre style={{ overflow: 'hidden', padding: '0' }}>
+                <ScrollArea p='10px'>
                     <code>
                         {dumpedString}
                     </code>
