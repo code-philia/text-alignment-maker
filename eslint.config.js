@@ -25,7 +25,8 @@ export default tseslint.config(
             ],
             'semi': ['error', 'always'],
             'no-unused-vars': ['off'],
-            '@typescript-eslint/no-unused-vars': ['warn']
+            '@typescript-eslint/no-unused-vars': ['warn'],
+            'space-in-parens': ['warning', 'always'],
         },
     },
 )

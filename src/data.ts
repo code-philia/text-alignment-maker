@@ -185,3 +185,60 @@ export class LabelingProvider {
         }
     }
 }
+
+// define a type for {"student": 546, "teachers": [{"teacher_idx": 18947, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 12}, {"teacher_idx": 6297, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 8}]}
+
+export type TeachersRelationship = {
+    student: number;
+    teachers: {
+        teacher_idx: number;
+        pattern: string;
+        cluster: number;
+    }[];
+};
+export type TeachersResult = TeachersRelationship[];
+
+export function isTeachersRelationship(data: TeachersRelationship): data is TeachersRelationship {
+    if (typeof data !== 'object') return false;
+    if (typeof data['student'] !== 'number') return false;
+    if (!Array.isArray(data['teachers'])) return false;
+    for (const teacher of data['teachers']) {
+        if (typeof teacher['teacher_idx'] !== 'number') return false;
+        if (typeof teacher['pattern'] !== 'string') return false;
+        if (typeof teacher['cluster'] !== 'number') return false;
+    }
+    return true;
+}
+
+export function isTeachersResult(data: TeachersResult): data is TeachersResult {
+    for (const item of data) {
+        if (!isTeachersRelationship(item)) return false;
+    }
+    return true;
+}
+
+export type TeachersRelationshipOptions = {
+    data?: TeachersResult;
+    teachersMap?: Map<number, TeachersRelationship['teachers']>;
+}
+export class TeachersRelationshipProvider {
+    private teachers: Map<number, TeachersRelationship['teachers']> = new Map();
+
+    constructor({ data, teachersMap }: TeachersRelationshipOptions) {
+        if (teachersMap) {
+            this.teachers = new Map(teachersMap);
+        } else if (data) {
+            this.teachers = new Map(data.map(({ student, teachers }) => [student, teachers]));
+        }
+    }
+
+    copy() {
+        return new TeachersRelationshipProvider({
+            teachersMap: new Map(this.teachers)
+        });
+    }
+
+    getTeachers(idx: number) {
+        return this.teachers.get(idx);
+    }
+}

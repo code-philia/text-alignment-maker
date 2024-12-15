@@ -163,6 +163,7 @@ function processSelectionEvents(code: HTMLElement, onTokenSelectionChange?: (sel
                 }
             });
 
+            console.log('changing token selection', selectedTokenIndices);
             onTokenSelectionChange?.(selectedTokenIndices);
         } else {
             code.querySelectorAll('span').forEach((span) => {
@@ -244,8 +245,8 @@ export function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, onTo
     }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);
 
     return (
-        <pre className='target-code-pre'>
-            <ScrollArea w={400} h={300}>
+        <pre className='target-code-pre' style={{ flex: '1' }}>
+            <ScrollArea h={300}>
                 <code ref={codeRef}>
                     {code}
                 </code>

@@ -1,18 +1,19 @@
 import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, AspectRatio, Popover } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { useCookie } from 'react-use';
 import { CodeBlock } from './CodeBlock';
 import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
-import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup } from '../data';
+import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, TeachersRelationship, isTeachersResult } from '../data';
 
 const demoResultsDirectory = '';
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
 const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
 const demoTrainDataFile = 'train.jsonl';
-const demoLabelingFilePath = 'sorted_labelling_sample_api.jsonl';
+const demoLabelingFile = 'sorted_labelling_sample_api.jsonl';
+const demoTeacherFile = 'student_teacher_pairs.jsonl';
 
 const standardColors: MantineColor[] = ['blue', 'green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
 function generateColorForLabelIndex(index: number) {
@@ -100,12 +101,20 @@ export function Feature() {
     }, [cookieTokensDirectory]);
 
     // Options
-    const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
     const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
+    const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
+    const [optionShowTeacherSamples, setOptionShowTeacherSamples] = useState(false);
 
     // Data
+    const [rawCodeSamples, setRawCodeSamples] = useState<LabeledTextSample[]>([]);
+    const [rawCommentSamples, setRawCommentSamples] = useState<LabeledTextSample[]>([]);
+
     const [codeSamples, setCodeSamples] = useState<LabeledTextSample[]>([]);
     const [commentSamples, setCommentSamples] = useState<LabeledTextSample[]>([]);
+    
+    const [teachersProvider, setTeachersProvider] = useState(
+        new TeachersRelationshipProvider({ })
+    );
 
     const [labelingProvider, setLabelingProvider] = useState(
         new LabelingProvider({
@@ -126,7 +135,7 @@ export function Feature() {
 
     // Navigation
     const [currentLabelingResultIndex, setCurrentSampleIndex] = useState(0);     // !! THIS IS the index from all labeling results !!
-    const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
+    // const [selectedIndices, setSelectedSampleIndices] = useState<string[]>([]);
     const [goToIndex, setGoToIndex] = useState<string | number>(0);
     const [goToIndexError, setGoToIndexError] = useState<boolean>(false);
 
@@ -154,9 +163,9 @@ export function Feature() {
         return samples.find((sample) => sample.index === index);
     };
 
-    const sampleExists = useCallback(() => {
-        return getValidSample(codeSamples, currentIndex) && getValidSample(codeSamples, currentIndex);
-    }, [codeSamples, currentIndex]);
+    const sampleExists = useMemo(() => {
+        return getValidSample(codeSamples, currentIndex) && getValidSample(commentSamples, currentIndex);
+    }, [currentIndex, codeSamples, commentSamples]);
 
     // Labeling
     const [labels, setLabels] = useState<DisplayedLabel[]>([]);
@@ -171,14 +180,14 @@ export function Feature() {
         setLabels(labels);
     };
 
-    const updateLabelingProvider = useCallback(() => {
-        if (!sampleExists()) return;
+    useEffect(() => {
+        if (!sampleExists) return;
 
         const numOfLabels = labelingProvider.getNumOfLabelsOnSample(currentIndex);
         const defaultGeneratedColors = generateColorForLabels(numOfLabels);
 
         setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
-    }, [currentIndex, labelingProvider, sampleExists]);
+    }, [sampleExists, currentIndex, labelingProvider]);
 
     const setLabelOfCodeTokens = useCallback((label: number) => {
         setLabelOfTokens(
@@ -205,6 +214,7 @@ export function Feature() {
     }, [currentLabelingResultIndex, selectedCommentTokens, commentSamples, labelingProvider]);
 
     const clickLabelCallback = (label: number) => {
+        console.log('got you selected comment tokens', selectedCommentTokens);
         if (selectedCodeTokens.length > 0) {
             setLabelOfCodeTokens(label);
         }
@@ -222,7 +232,7 @@ export function Feature() {
         (async () => {
 
             const path = optionTokensDirectory.endsWith('/') ? optionTokensDirectory.slice(0, -1) : optionTokensDirectory;
-            const labelingData = await fetch(`/mock${path}/${demoLabelingFilePath}`)
+            const labelingData = await fetch(`/mock${path}/${demoLabelingFile}`)
                 .then((response) => {
                     if (!response.ok) {
                         throw new Error('Cannot fetch labeling file');
@@ -233,7 +243,6 @@ export function Feature() {
                 .then((data) => {
                     labelingProvider.load(data);
                     setLabelingProvider(labelingProvider.copy());
-                    updateLabelingProvider();   // FIXME is this line necessary to trigger update?
 
                     return data;
                 })
@@ -258,6 +267,15 @@ export function Feature() {
                                 const codeTokenLists = jsonList.map((line) => JSON.parse(line.trim()));
                                 if (!codeTokenLists) return;
 
+                                setRawCodeSamples(data.map((d, i) => {
+                                    return {
+                                        index: i,
+                                        text: d['code'],
+                                        tokens: codeTokenLists[i],
+                                        labelingRanges: []
+                                    };
+                                }));
+
                                 setCodeSamples(labelingProvider.getSampleIndices().map((i: number) => {
                                     return {
                                         index: i,
@@ -275,6 +293,15 @@ export function Feature() {
                                 const commentTokenLists = jsonList.map((line) => JSON.parse(line.trim()));
                                 if (!commentTokenLists) return;
 
+                                setRawCommentSamples(data.map((d, i) => {
+                                    return {
+                                        index: i,
+                                        text: d['docstring'],
+                                        tokens: commentTokenLists[i],
+                                        labelingRanges: []
+                                    };
+                                }));
+
                                 setCommentSamples(labelingProvider.getSampleIndices().map((i: number) => {
                                     return {
                                         index: i,
@@ -291,11 +318,24 @@ export function Feature() {
                             .then(() => {
                                 setLoaderOpened(false);
                             });
+                        
+                        fetchResponse(optionTokensDirectory, demoTeacherFile)
+                            .then(readJsonLinesToList)
+                            .then(jsonList => {
+                                if (!jsonList) return;
+
+                                const teacherData = jsonList.map((line) => JSON.parse(line.trim()));
+                                if (!teacherData) return;
+
+                                if (isTeachersResult(teacherData)) {
+                                    setTeachersProvider(new TeachersRelationshipProvider({ data: teacherData }));
+                                }   // TODO add error handling, either a popup or a dialog
+                            });
                     });
             }
         })();
 
-    }, [labelingProvider, optionTokensDirectory, setCookieTokensDirectory, updateLabelingProvider]);  // FIXME is nested useCallback ugly?
+    }, [labelingProvider, optionTokensDirectory, setCookieTokensDirectory]);  // FIXME is nested useCallback ugly?
 
     // Code Area
     const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: DisplayedLabel[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
@@ -305,51 +345,43 @@ export function Feature() {
                 tokens={sample.tokens ?? []}
                 groupedTokenIndices={labelingRanges}
                 groupColors={labels.map((label) => label.color)}
-                onTokenSelectionChange={(s: number[]) => {
-                    onTokenSelectionChange?.(s);
-                }}
+                onTokenSelectionChange={onTokenSelectionChange}
             />
         );
     };
 
-    const codeAreaForSample = useCallback((sample: LabeledTextSample, group: number) => {
-        return codeArea(
+    const codeAreaForRawSampleIndex = (index: number, group: number) => {
+        const sample = getValidSample(group === codeGroup ? rawCodeSamples : rawCommentSamples, index);
+        return codeAreaForSample(
             sample!,
-            labelingProvider.getTokensOnGroup(currentIndex, codeGroup) ?? [],
-            labels,
-            setSelectedCodeTokens
+            labelingProvider.getTokensOnGroup(index, group) ?? []
         );
-    }, [currentIndex, labelingProvider, labels]);
+    };
 
-    const codeAreaForComment = useMemo(() => {
-        if (!sampleExists()) {
+    const codeAreaForSample = (sample: LabeledTextSample | undefined, labelingRanges: number[][], selectionCallback: typeof setSelectedCodeTokens = () => { }) => {
+        return sample ? codeArea(
+            sample,
+            labelingRanges,
+            labels,
+            selectionCallback
+        ) : null;
+    };
+
+    const codeAreaForCurrentIndexForCodeOrComment = (group: number) => {
+        if (!sampleExists) {
             return null;
         }
-        return codeArea(
-            getValidSample(commentSamples, currentIndex)!,
-            labelingProvider.getTokensOnGroup(currentIndex, commentGroup) ?? [],
-            labels,
-            setSelectedCommentTokens
-        );
-    }, [sampleExists, commentSamples, currentIndex, labelingProvider, labels]);
 
-    const codeAreaForCode = useMemo(() => {
-        if (!sampleExists()) {
-            return null;
-        }
-        return codeArea(
-            getValidSample(codeSamples, currentIndex)!,
-            labelingProvider.getTokensOnGroup(currentIndex, codeGroup) ?? [],
-            labels,
-            setSelectedCodeTokens
+        const sample = getValidSample(group === codeGroup ? codeSamples : commentSamples, currentIndex);
+        return codeAreaForSample(
+            sample!,
+            labelingProvider.getTokensOnGroup(currentIndex, group) ?? [],
+            group === codeGroup ? setSelectedCodeTokens : setSelectedCommentTokens
         );
-    }, [sampleExists, codeSamples, currentIndex, labelingProvider, labels]);
+    };
 
-    // Data Loading
-    useEffect(() => {
-        // Set up labels and colors
-        updateLabelingProvider();
-    }, [currentLabelingResultIndex, updateLabelingProvider]);   // FIXME why should we call again here, after rendering all the code?
+    const codeAreaForComment = useMemo(() => codeAreaForCurrentIndexForCodeOrComment(commentGroup), [currentIndex, commentSamples, labels, labelingProvider]);
+    const codeAreaForCode = useMemo(() => codeAreaForCurrentIndexForCodeOrComment(codeGroup), [currentIndex, codeSamples, labels, labelingProvider]);
 
     const classList = ['feature-block'];
     if (optionOutlineTokens) {
@@ -380,7 +412,7 @@ export function Feature() {
                             A Training file that contains code and docstring:<br/><b>{demoTrainDataFile}</b>
                         </List.Item>
                         <List.Item>
-                            A labeling result file, which as an arrya of labeling applied to a list of samples, will be shown below:<br/><b>{demoLabelingFilePath}</b>
+                            A labeling result file, which as array of labeling applied to a list of samples, will be shown below:<br/><b>{demoLabelingFile}</b>
                         </List.Item>
                     </List>
                 </Text>
@@ -388,7 +420,7 @@ export function Feature() {
         </HoverCard>
     );
 
-    const loadingOptions = (
+    const loadingOptions = useMemo(() => (
         <Flex align='flex-end'>
             <TextInput
                 value={optionTokensDirectory}
@@ -400,78 +432,85 @@ export function Feature() {
             <Space w='sm'></Space>
             <Button onClick={loadFileCallback}>Load</Button>
         </Flex>
-    );
+    ), [optionTokensDirectory, loadFileCallback]);
 
-    const displayOptions = (
+    const displayOptions = useMemo(() => (
         <Group>
             <Checkbox
                 checked={optionOutlineTokens}
                 onChange={(event) => setOptionOutlineTokens(event.currentTarget.checked)}
                 label='Outline Tokens'
             />
+            <Checkbox
+                checked={optionShowTeacherSamples}
+                onChange={(event) => setOptionShowTeacherSamples(event.currentTarget.checked)}
+                label='Show Teacher Samples'
+            />
         </Group>
-    );
+    ), [optionOutlineTokens, optionShowTeacherSamples]);
 
-    const navigationRow = (currentIndex === undefined) ? null : (
-        <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
-            <Grid.Col span={2.8}>
-                <Group gap='xs' align='center'>
-                    <Popover position='bottom' withArrow shadow='md'>
-                        <Popover.Target>
-                            <Button variant='outline'>
-                                Go to index
-                            </Button>
-                        </Popover.Target>
-                        <Popover.Dropdown>
-                            <NumberInput
-                                value={goToIndex}
-                                min={0}
-                                onChange={(value) => setGoToIndex(value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
-                                        handleGoTo();
+    const navigationRow = useMemo(() => {
+        return (currentIndex === undefined) ? null : (
+            <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
+                <Grid.Col span={2.8}>
+                    <Group gap='xs' align='center'>
+                        <Popover position='bottom' withArrow shadow='md'>
+                            <Popover.Target>
+                                <Button variant='outline'>
+                                    Go to index
+                                </Button>
+                            </Popover.Target>
+                            <Popover.Dropdown>
+                                <NumberInput
+                                    value={goToIndex}
+                                    min={0}
+                                    onChange={(value) => setGoToIndex(value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
+                                            handleGoTo();
+                                        }
+                                    }}
+                                    error={goToIndexError}
+                                    w='90'
+                                    rightSection={
+                                        <Kbd w='19' h='22' p='0'>
+                                            <Center p='0'>
+                                                ↵
+                                            </Center>
+                                        </Kbd>
                                     }
-                                }}
-                                error={goToIndexError}
-                                w='90'
-                                rightSection={
-                                    <Kbd w='19' h='22' p='0'>
-                                        <Center p='0'>
-                                            ↵
-                                        </Center>
-                                    </Kbd>
-                                }
-                                rightSectionWidth={34}
-                            >
-                            </NumberInput>
-                        </Popover.Dropdown>
-                    </Popover>
-                </Group>
-            </Grid.Col>
-            <Grid.Col span={6.4}>
-                <Center>
-                    <NumberNavigation
-                        value={currentLabelingResultIndex}
-                        total={labelingProvider.getSampleIndices().length}
-                        onChangeValue={setCurrentSampleIndex}
-                        tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
-                    />
-                </Center>
-            </Grid.Col>
-            <Grid.Col span={2.8}>
-                <Group justify='flex-end'>
-                    <Button
-                        w='11em'
-                        onClick={() => labelingProvider.save()}
-                    >
-                        Save Labeling
-                    </Button>
-                </Group>
-            </Grid.Col>
-        </Grid>
-    );
+                                    rightSectionWidth={34}
+                                >
+                                </NumberInput>
+                            </Popover.Dropdown>
+                        </Popover>
+                    </Group>
+                </Grid.Col>
+                <Grid.Col span={6.4}>
+                    <Center>
+                        <NumberNavigation
+                            value={currentLabelingResultIndex}
+                            total={labelingProvider.getSampleIndices().length}
+                            onChangeValue={setCurrentSampleIndex}
+                            tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
+                        />
+                    </Center>
+                </Grid.Col>
+                <Grid.Col span={2.8}>
+                    <Group justify='flex-end'>
+                        <Button
+                            w='11em'
+                            onClick={() => labelingProvider.save()}
+                        >
+                            Save Labeling
+                        </Button>
+                    </Group>
+                </Grid.Col>
+            </Grid>
+        )
+    }, [currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider]);
 
-    const textLabelingArea = (
+    const textLabelingArea = useMemo(() => (
         loaderOpened
             ?
             <Center h='300'>
@@ -483,7 +522,7 @@ export function Feature() {
             :
         currentIndex
             ?
-            <Container>
+            <Container p='0'>
                 <Center>
                     <AlignmentLabels
                         labels={labels}
@@ -491,11 +530,13 @@ export function Feature() {
                         onClickLabel={clickLabelCallback}
                     />
                 </Center>
-                <Title order={4} style={{ padding: '0.3em 2em' }}>Sample: {currentIndex}</Title>
-                <Group gap='sm' justify='center'>
-                    {codeAreaForComment}
-                    {codeAreaForCode}
-                </Group>
+                <Container p='0 1em'>
+                    <Title order={4} style={{ padding: '0.3em 0' }}>Sample: {currentIndex}</Title>
+                    <Group gap='sm' justify='space-between'>
+                        {codeAreaForComment}
+                        {codeAreaForCode}
+                    </Group>
+                </Container>
             </Container>
             :
             <Center h='300'>
@@ -503,6 +544,61 @@ export function Feature() {
                     No instance is loaded
                 </Text>
             </Center>
+    ), [loaderOpened, currentIndex, labels, codeAreaForComment, codeAreaForCode, clickLabelCallback]);
+
+    const getTeacherSamples = useCallback((idx: number) => {
+        return teachersProvider.getTeachers(idx);
+    }, [teachersProvider]);
+    
+    const teacherSamplesForCurrentIndex = useMemo(() => {
+        return getTeacherSamples(currentIndex);
+    }, [currentIndex, getTeacherSamples]);
+
+    const teacherSamplesDisplay = useMemo(() => {
+        return teacherSamplesForCurrentIndex
+            ?
+            teacherSamplesForCurrentIndex.map((teacher, i) => (
+                <Container key={i} p='0'>
+                    <Stack key={i} gap='0' align='baseline' p='0.5em 0.1em'>
+                        <Title order={4} size='sm'>Teacher: {teacher.teacher_idx}</Title>
+                        <Text size='sm'>Pattern: {teacher.pattern}</Text>
+                        <Text size='sm'>Cluster: {teacher.cluster}</Text>
+                    </Stack>
+                    <Group gap='sm' justify='space-between'>
+                        {codeAreaForRawSampleIndex(teacher.teacher_idx, commentGroup)}
+                        {codeAreaForRawSampleIndex(teacher.teacher_idx, codeGroup)}
+                    </Group>
+                    <Space h='md'></Space>
+                </Container>
+            ))
+            :
+            null;
+    }, [teacherSamplesForCurrentIndex, rawCodeSamples, rawCommentSamples]);
+    
+    const teacherSamplesArea = (
+        optionShowTeacherSamples && currentIndex
+        ?
+        <>
+                <Space h='lg'></Space>
+                <Divider></Divider>
+                <Space h='lg'></Space>
+                {
+                    teacherSamplesForCurrentIndex
+                        ?
+                        <Container p='0 1em'>
+                            <Title order={4} style={{ padding: '0.3em 0' }}>Teacher Samples</Title>
+                            {teacherSamplesDisplay}
+                        </Container>
+                        :
+                        <Center h='300'>
+                            <Text c='gray'>
+                                No teacher samples
+                            </Text>
+                        </Center>
+                }
+            </>
+            :
+            null
     );
 
     // const tagsArea = (
@@ -550,6 +646,7 @@ export function Feature() {
             { navigationRow }
             <Space h='lg'></Space>
             { textLabelingArea }
+            { teacherSamplesArea }
             
             { saveLabelingModal }
         </div>
