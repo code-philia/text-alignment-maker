@@ -666,25 +666,29 @@ export function Feature() {
     }, [teacherSamplesForCurrentIndex, rawCodeSamples, rawCommentSamples]);
     
     const teacherSamplesArea = (
-        <>
-            <Space h='xl'></Space>
-            <Divider></Divider>
-            <Space h='xl'></Space>
-            {
-                teacherSamplesForCurrentIndex
-                    ?
-                    <Container p='0 1em'>
-                        <Title order={4} style={{ padding: '0 0 0.3em' }}>Teacher Samples</Title>
-                        {teacherSamplesDisplay}
-                    </Container>
-                    :
-                    <Center h='300'>
-                        <Text c='gray'>
-                            No teacher samples
-                        </Text>
-                    </Center>
-            }
-        </>
+        optionShowTeacherSamples
+            ?
+            <>
+                <Space h='xl'></Space>
+                <Divider></Divider>
+                <Space h='xl'></Space>
+                {
+                    teacherSamplesForCurrentIndex && teacherSamplesForCurrentIndex.length > 0
+                        ?
+                        <Container p='0 1em'>
+                            <Title order={4} style={{ padding: '0 0 0.3em' }}>Teacher Samples</Title>
+                            {teacherSamplesDisplay}
+                        </Container>
+                        :
+                        <Center h='100'>
+                            <Text c='gray'>
+                                No teacher samples
+                            </Text>
+                        </Center>
+                }
+            </>
+            :
+            null
     );
 
     // const tagsArea = (
