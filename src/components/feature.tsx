@@ -667,14 +667,14 @@ export function Feature() {
     
     const teacherSamplesArea = (
         <>
-            <Space h='lg'></Space>
+            <Space h='xl'></Space>
             <Divider></Divider>
-            <Space h='lg'></Space>
+            <Space h='xl'></Space>
             {
                 teacherSamplesForCurrentIndex
                     ?
                     <Container p='0 1em'>
-                        <Title order={4} style={{ padding: '0.3em 0' }}>Teacher Samples</Title>
+                        <Title order={4} style={{ padding: '0 0 0.3em' }}>Teacher Samples</Title>
                         {teacherSamplesDisplay}
                     </Container>
                     :
