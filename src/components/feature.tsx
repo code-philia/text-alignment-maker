@@ -14,9 +14,9 @@ const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
 const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
 const demoTrainDataFile = 'train.jsonl';
 const demoLabelingFile = 'sorted_labelling_sample_api.jsonl';
-const demoTeacherFile = 'student_teacher_pairs.jsonl';
+const demoTeacherFile = 'student_teachers_pairs.jsonl';
 
-const standardColors: MantineColor[] = ['blue', 'green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
+const standardColors: MantineColor[] = ['green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
 function generateColorForLabelIndex(index: number) {
     return standardColors[index % standardColors.length];
 }
