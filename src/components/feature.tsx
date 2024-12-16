@@ -255,7 +255,6 @@ export function Feature() {
     }, [currentLabelingResultIndex, selectedCommentTokens, commentSamples, labelingProvider]);
 
     const clickLabelCallback = (label: number) => {
-        console.log('got you selected comment tokens', selectedCommentTokens);
         if (selectedCodeTokens.length > 0) {
             setLabelOfCodeTokens(label);
         }

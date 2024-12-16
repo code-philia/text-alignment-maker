@@ -163,7 +163,6 @@ function processSelectionEvents(code: HTMLElement, onTokenSelectionChange?: (sel
                 }
             });
 
-            console.log('changing token selection', selectedTokenIndices);
             onTokenSelectionChange?.(selectedTokenIndices);
         } else {
             code.querySelectorAll('span').forEach((span) => {
