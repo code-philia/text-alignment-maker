@@ -1,4 +1,17 @@
-//
+// other utils
+
+export function tryStringifyJson(target: any): string | undefined {
+    try {
+        if (typeof target === 'string') {
+            return target;
+        }
+
+        const result = JSON.stringify(target);
+        return result;
+    } catch (e) {
+        return undefined;
+    }
+}
 
 // NLP specific 
 
@@ -29,7 +42,7 @@ export function findCommentEnd(s: string, pos: number): number {
     return i;
 }
 
-// experiment data  specific
+// experiment data specific
 
 export function isSpecialToken(token: string) {
     return token.startsWith('<') && token.endsWith('>');

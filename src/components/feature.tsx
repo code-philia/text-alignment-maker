@@ -1,4 +1,4 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, AspectRatio, Popover } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
@@ -6,7 +6,8 @@ import { useCookie } from 'react-use';
 import { CodeBlock } from './CodeBlock';
 import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
-import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, TeachersRelationship, isTeachersResult } from '../data';
+import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data';
+import { tryStringifyJson } from '../utils';
 
 const demoResultsDirectory = '';
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
@@ -647,10 +648,33 @@ export function Feature() {
 
                     return (
                         <Container key={i} p='0'>
-                            <Stack key={i} gap='0' align='baseline' p='0.5em 0.1em'>
-                                <Title order={4} size='sm'>Teacher: {teacher.teacher_idx}</Title>
-                                <Text size='sm'>Pattern: {teacher.pattern}</Text>
-                                <Text size='sm'>Cluster: {teacher.cluster}</Text>
+                            <Stack key={i} gap='0' align='baseline' p='1em 0.1em 0.5em'>
+                                <Title order={4} size='md' pb='0.2em' c='blue'>Teacher: {teacher.teacher_idx}</Title>
+                                {
+                                    Object.keys(teacher)
+                                        .filter(key => key !== 'teacher_idx')
+                                        .map((key, i) =>
+                                            <Group
+                                                key={i}
+                                                p='0.2em 0'
+                                                c='blue'
+                                                gap='xs'
+                                            >
+                                                <Badge
+                                                    color='blue'
+                                                    radius='sm'
+                                                    size='sm'
+                                                >
+                                                    { key }
+                                                </Badge>
+                                                <Text
+                                                    size='sm'
+                                                >
+                                                    { tryStringifyJson(teacher[key]) }
+                                                </Text>
+                                            </Group>
+                                        )
+                                }
                             </Stack>
                             <Group gap='sm' justify='space-between'>
                                 {codeAreaForRawSampleIndex(teacher.teacher_idx, commentGroup)}

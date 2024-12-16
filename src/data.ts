@@ -192,8 +192,7 @@ export type TeachersRelationship = {
     student_idx: number;
     teachers: {
         teacher_idx: number;
-        pattern: string;
-        cluster: number;
+        [key: string]: any;
     }[];
 };
 export type TeachersResult = TeachersRelationship[];
@@ -204,8 +203,6 @@ export function isTeachersRelationship(data: TeachersRelationship): data is Teac
     if (!Array.isArray(data['teachers'])) return false;
     for (const teacher of data['teachers']) {
         if (typeof teacher['teacher_idx'] !== 'number') return false;
-        if (typeof teacher['pattern'] !== 'string') return false;
-        if (typeof teacher['cluster'] !== 'number') return false;
     }
     return true;
 }
