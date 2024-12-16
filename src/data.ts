@@ -189,7 +189,7 @@ export class LabelingProvider {
 // define a type for {"student": 546, "teachers": [{"teacher_idx": 18947, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 12}, {"teacher_idx": 6297, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 8}]}
 
 export type TeachersRelationship = {
-    student: number;
+    student_idx: number;
     teachers: {
         teacher_idx: number;
         pattern: string;
@@ -200,7 +200,7 @@ export type TeachersResult = TeachersRelationship[];
 
 export function isTeachersRelationship(data: TeachersRelationship): data is TeachersRelationship {
     if (typeof data !== 'object') return false;
-    if (typeof data['student'] !== 'number') return false;
+    if (typeof data['student_idx'] !== 'number') return false;
     if (!Array.isArray(data['teachers'])) return false;
     for (const teacher of data['teachers']) {
         if (typeof teacher['teacher_idx'] !== 'number') return false;
@@ -228,7 +228,7 @@ export class TeachersRelationshipProvider {
         if (teachersMap) {
             this.teachers = new Map(teachersMap);
         } else if (data) {
-            this.teachers = new Map(data.map(({ student, teachers }) => [student, teachers]));
+            this.teachers = new Map(data.map(({ student_idx, teachers }) => [student_idx, teachers]));
         }
     }
 
