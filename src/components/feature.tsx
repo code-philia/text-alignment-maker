@@ -2,14 +2,13 @@ import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Cente
 import { IconInfoCircle, IconSettings } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
-import { useCookie } from 'react-use';
 import { CodeBlock } from './CodeBlock';
 import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
 import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
 import { tryStringifyJson } from '../utils';
+import { globalMakerConfigSchema, useSmartConfig } from '../config';
 
-const demoResultsDirectory = '';
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
 const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
 const demoTrainDataFile = 'train.jsonl';
@@ -91,55 +90,7 @@ function readJsonLinesToList(res: Response | void): Promise<string[]> | undefine
 }
 
 export function Feature() {
-    // Stored Options
-    const [cookieTokensDirectory, setCookieTokensDirectory] = useCookie('tokens-directory');
-    const [cookieOutlineTokens, setCookieOutlineTokens] = useCookie('outline-tokens');
-    const [cookieShowTeacherSamples, setCookieShowTeacherSamples] = useCookie('show-teacher-samples');
-    
-    // Cookie Loading
-    const firstLoaded = useRef(true);
-
-    // TODO don't use so many useEffect, and even both at cookie-end and real-prop-end
-    useEffect(() => {
-        if (firstLoaded.current && cookieTokensDirectory) {
-            setOptionTokensDirectory(cookieTokensDirectory);
-        }
-    }, [cookieTokensDirectory]);    // TODO should this array be empty?
-    useEffect(() => {
-        if (firstLoaded.current && cookieOutlineTokens) {
-            setOptionOutlineTokens(cookieOutlineTokens === 'true');
-        }
-    }, [cookieOutlineTokens]);
-    useEffect(() => {
-        if (firstLoaded.current && cookieShowTeacherSamples) {
-            setOptionShowTeacherSamples(cookieShowTeacherSamples === 'true');
-        }
-    }, [cookieShowTeacherSamples]);
-
-    useEffect(() => {
-        if (firstLoaded.current) {
-            firstLoaded.current = false;
-        }
-    });
-
-    // Options
-    const [optionTokensDirectory, setOptionTokensDirectory] = useState(demoResultsDirectory);
-    const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
-    const [optionShowTeacherSamples, setOptionShowTeacherSamples] = useState(false);
-
-    const [optionDefaultColors, setOptionDefaultColors] = useState(standardColors);
-
-    useEffect(() => {
-        if (!firstLoaded.current) {
-            setCookieOutlineTokens(optionOutlineTokens.toString());
-        }
-    }, [optionOutlineTokens]);
-
-    useEffect(() => {
-        if (!firstLoaded.current) {
-            setCookieShowTeacherSamples(optionShowTeacherSamples.toString());
-        }
-    }, [optionShowTeacherSamples]);
+    const config = useSmartConfig(globalMakerConfigSchema);
 
     // Data
     const [rawCodeSamples, setRawCodeSamples] = useState<LabeledTextSample[]>([]);
@@ -288,14 +239,11 @@ export function Feature() {
     const loadFileCallback = useCallback(() => {
         resetStates();
 
-        // FIXME too long, too nested ← written by Copilot
-        setCookieTokensDirectory(optionTokensDirectory);
-
         // TODO optimization, don't load full/all samples into memory
         setLoaderOpened(true);
         (async () => {
 
-            const path = optionTokensDirectory.endsWith('/') ? optionTokensDirectory.slice(0, -1) : optionTokensDirectory;
+            const path = config.tokensDirectory.endsWith('/') ? config.tokensDirectory.slice(0, -1) : config.tokensDirectory;
             const labelingData = await fetch(`/mock${path}/${demoLabelingFile}`)
                 .then((response) => {
                     if (!response.ok) {
@@ -317,13 +265,13 @@ export function Feature() {
 
             // FIXME too long nested, too many parenthesis
             if (labelingData !== undefined) {
-                fetchResponse(optionTokensDirectory, demoTrainDataFile)
+                fetchResponse(config.tokensDirectory, demoTrainDataFile)
                     .then(readJsonLinesToList)
                     .then(jsonList => {
                         if (jsonList === undefined) return;
                         const data = jsonList.map((line) => JSON.parse(line.trim()));
 
-                        const loadCode = fetchResponse(optionTokensDirectory, demoCompleteCodeTokensFile)
+                        const loadCode = fetchResponse(config.tokensDirectory, demoCompleteCodeTokensFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -349,7 +297,7 @@ export function Feature() {
                                     };
                                 }));
                             });
-                        const loadComment = fetchResponse(optionTokensDirectory, demoCompleteCommentTokensFile)
+                        const loadComment = fetchResponse(config.tokensDirectory, demoCompleteCommentTokensFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -383,7 +331,7 @@ export function Feature() {
                                 setLoaderOpened(false);
                             });
                         
-                        fetchResponse(optionTokensDirectory, demoTeacherFile)
+                        fetchResponse(config.tokensDirectory, demoTeacherFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -399,7 +347,7 @@ export function Feature() {
             }
         })();
 
-    }, [labelingProvider, optionTokensDirectory, setCookieTokensDirectory]);  // FIXME is nested useCallback ugly?
+    }, [labelingProvider, config.tokensDirectory]);  // FIXME is nested useCallback ugly?
 
     // Code Area
     const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: DisplayedLabel[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
@@ -453,7 +401,7 @@ export function Feature() {
     const codeAreaForCode = useMemo(() => codeAreaForCurrentIndexForCodeOrComment(codeGroup), [currentIndex, codeSamples, labels, labelingProvider]);
 
     const classList = ['feature-block'];
-    if (optionOutlineTokens) {
+    if (config.outlineTokens) {
         classList.push('outline-tokens');
     }
 
@@ -492,8 +440,8 @@ export function Feature() {
     const loadingOptions = useMemo(() => (
         <Flex align='flex-end'>
             <TextInput
-                value={optionTokensDirectory}
-                onChange={(event) => setOptionTokensDirectory(event.currentTarget.value)}
+                value={config.tokensDirectory}
+                onChange={(event) => config.tokensDirectory = event.currentTarget.value}
                 label='Result directory'
                 description={<>Directory that contains original text, tokens, and labeling files{fileInfoBadge}</>}
                 style={{ flexGrow: 1 }}
@@ -508,18 +456,18 @@ export function Feature() {
             <Space w='sm'></Space>
             <Button onClick={loadFileCallback}>Load</Button>
         </Flex>
-    ), [optionTokensDirectory, loadFileCallback]);
+    ), [config.tokensDirectory, loadFileCallback]);
 
     const displayOptions = useMemo(() => (
         <Group>
             <Checkbox
-                checked={optionOutlineTokens}
-                onChange={(event) => setOptionOutlineTokens(event.currentTarget.checked)}
+                checked={config.outlineTokens}
+                onChange={(event) => { config.outlineTokens = event.currentTarget.checked; }}
                 label='Outline Tokens'
             />
             <Checkbox
-                checked={optionShowTeacherSamples}
-                onChange={(event) => setOptionShowTeacherSamples(event.currentTarget.checked)}
+                checked={config.showTeacherSamples}
+                onChange={(event) => { config.showTeacherSamples = event.currentTarget.checked; }}
                 label='Show Teacher Samples'
             />
             <div style={{ flex: 1 }}></div>
@@ -529,7 +477,7 @@ export function Feature() {
                 <IconSettings></IconSettings>
             </Button>
         </Group>
-    ), [optionOutlineTokens, optionShowTeacherSamples]);
+    ), [config.outlineTokens, config.showTeacherSamples]);
 
     const saveLabelingModal = (
         <Modal
@@ -745,7 +693,7 @@ export function Feature() {
 
     const optionalTeacherSamplesArea =
         <Transition
-            mounted={optionShowTeacherSamples}
+            mounted={config.showTeacherSamples}
             transition="fade"
             duration={400}
             timingFunction="ease"
