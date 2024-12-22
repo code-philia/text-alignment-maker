@@ -1,0 +1,20 @@
+{"student_idx": 546, "teachers": [{"teacher_idx": 18947, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 12}, {"teacher_idx": 6297, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 8}]}
+{"student_idx": 902, "teachers": [{"teacher_idx": 13813, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 28}, {"teacher_idx": 10524, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 14}]}
+{"student_idx": 3864, "teachers": [{"teacher_idx": 17721, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 23}]}
+{"student_idx": 4271, "teachers": [{"teacher_idx": 10032, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 29}, {"teacher_idx": 16282, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 29}]}
+{"student_idx": 4864, "teachers": [{"teacher_idx": 14774, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 15}]}
+{"student_idx": 5638, "teachers": [{"teacher_idx": 7113, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 3}]}
+{"student_idx": 6043, "teachers": []}
+{"student_idx": 7822, "teachers": [{"teacher_idx": 4105, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 21}, {"teacher_idx": 10797, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 3}, {"teacher_idx": 9767, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 8}]}
+{"student_idx": 7845, "teachers": [{"teacher_idx": 18263, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 16}, {"teacher_idx": 6484, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 2}]}
+{"student_idx": 8596, "teachers": []}
+{"student_idx": 8908, "teachers": [{"teacher_idx": 1888, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 13}, {"teacher_idx": 15636, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 8}, {"teacher_idx": 7406, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 16}]}
+{"student_idx": 9970, "teachers": [{"teacher_idx": 1510, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 13}, {"teacher_idx": 21858, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 18}, {"teacher_idx": 2467, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 9}]}
+{"student_idx": 19222, "teachers": [{"teacher_idx": 14715, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 4}, {"teacher_idx": 14855, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 9}]}
+{"student_idx": 35950, "teachers": [{"teacher_idx": 21599, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 2}, {"teacher_idx": 7018, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 5}, {"teacher_idx": 16943, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 0}]}
+{"student_idx": 55138, "teachers": [{"teacher_idx": 22878, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 5}]}
+{"student_idx": 57129, "teachers": []}
+{"student_idx": 77582, "teachers": []}
+{"student_idx": 123630, "teachers": [{"teacher_idx": 21780, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 19}, {"teacher_idx": 3641, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 9}, {"teacher_idx": 13551, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 23}]}
+{"student_idx": 123668, "teachers": [{"teacher_idx": 4121, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 6}]}
+{"student_idx": 246579, "teachers": [{"teacher_idx": 22297, "pattern": "ROOT:VERB_OBJ:NOUN", "cluster": 28}]}
