@@ -8,6 +8,7 @@ import { AlignmentLabels } from './AlignmentLabels';
 import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
 import { tryStringifyJson } from '../utils';
 import { getDefaultLabelColors, globalMakerConfigSchema, useSmartConfig } from '../config';
+import { useClickOutside } from '@mantine/hooks';
 
 type DisplayedLabel = {
     text: string;
@@ -722,6 +723,9 @@ export function Feature() {
 
     const [moreSettingsModalOpened, setMoreSettingsModalOpened] = useState(false);
     const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
+
+    const [resetColorPopoverOpened, setResetColorPopoverOpened] = useState(false);
+    const resetColorPopoverRef = useClickOutside(() => setResetColorPopoverOpened(false));
     
     const moreSettingsModal = (
         <Modal
@@ -737,14 +741,46 @@ export function Feature() {
                 <Container p={0} w='100%'>
                     <Group gap={6} w='fit-content'>
                         <Text size='sm' fw={600}>Label Colors</Text>
-                        <Button
-                            w={18}
-                            h={18}
-                            p='0'
-                            onClick={resetLabelColors}
+                        <Popover
+                            opened={resetColorPopoverOpened}
+                            position='right'
+                            withArrow
+                            shadow='xs'
+                            offset={{
+                                mainAxis: 12,
+                                crossAxis: -4
+                            }}
                         >
-                            <IconReload style={{ width: rem(12), height: rem(12) }}/>
-                        </Button>
+                            <Popover.Target>
+                                <Button
+                                    w={18}
+                                    h={18}
+                                    color='black'
+                                    p='0'
+                                    onClick={() => setResetColorPopoverOpened(true)}
+                                >
+                                    <IconReload style={{ width: rem(12), height: rem(12) }}/>
+                                </Button>
+                            </Popover.Target>
+                            <Popover.Dropdown ref={resetColorPopoverRef} p='6px 6px'>
+                                <Group
+                                    p={0}
+                                    gap='xs'
+                                >
+                                    <Text size='sm' fw={600}>Reset all colors?</Text>
+                                    <Button
+                                        size='compact-xs'
+                                        color='red'
+                                        onClick={() => {
+                                            resetLabelColors();
+                                            setResetColorPopoverOpened(false);
+                                        }}
+                                    >
+                                        Confirm
+                                    </Button>
+                                </Group>
+                            </Popover.Dropdown>
+                        </Popover>
                     </Group>
                     <Space h='sm'></Space>
                     <Group gap="xs" w='fit-content' justify='flex-start'>
@@ -752,11 +788,10 @@ export function Feature() {
                             <Popover
                                 key={index}
                                 position="bottom"
-                                shadow='xl'
+                                shadow='xs'
                                 withArrow
                                 closeOnClickOutside
                                 clickOutsideEvents={['mouseup', 'touchend']}
-                                transitionProps={{ duration: 0 }}
                                 onOpen={() => {
                                     index === activeColorIndex ? setActiveColorIndex(null) : setActiveColorIndex(index);
                                 }}
