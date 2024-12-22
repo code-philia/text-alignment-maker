@@ -32,6 +32,45 @@ function createConfigItem<T>(defaultValue: T, cookieKey?: string): ConfigItemDef
     };
 }
 
+function useWritableConfig<T extends { [keys: string]: any }>(
+    state: T,
+    setter: (property: string, value: any) => void
+) {
+    // 创建可写的基础对象
+    const baseObject = useMemo(() => {
+        const obj = {} as T;
+        
+        // 为每个属性设置可写的描述符
+        Object.keys(state).forEach(key => {
+            Object.defineProperty(obj, key, {
+                value: state[key],
+                writable: true,
+                configurable: true,
+                enumerable: true
+            });
+        });
+        
+        return obj;
+    }, [state]);
+
+    // 创建 Proxy
+    const configProxy = useMemo(() => new Proxy(baseObject, {
+        set(target, property: string, value) {
+            if (property in target) {
+                target[property as keyof T] = value;
+                setter(property, value);
+                return true;
+            }
+            return false;
+        },
+        get(target, property: string) {
+            return target[property as keyof T];
+        }
+    }), [baseObject, setter]);
+
+    return configProxy as WritableConfig<T>;
+}
+
 export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfig<T> {
     const [state, setState] = useState<ConfigValues<T>>(() =>
         Object.fromEntries(
@@ -88,26 +127,29 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
         setState(produce((draft: any) => {
             (draft)[property] = value;
         }));
-    }, []);
+    }, [setState]);
     
-    const configProxy = useMemo(() => new Proxy(state, {
-        set(target, property: string, value) {
-            setter(property, value);
-            return true;
-        },
-        get(target, property: string) {
-            return state[property as keyof T];
-        }
-    }), [state, setter]);
+    return useWritableConfig(state, setter);
+}
 
-    return configProxy as WritableConfig<T>;
+// setup default config
+
+export const simpleMantineStandardColors = ['green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
+export function convertMantineColorToRgb(colorName: string) {
+    const computedRgbStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue(`--mantine-color-${colorName}-filled`);
+    return computedRgbStyle !== '' ? computedRgbStyle : '#ffffff';
+}
+
+export function getDefaultLabelColors() {
+    return simpleMantineStandardColors.map(convertMantineColorToRgb);
 }
 
 export const globalMakerConfigSchema = {
     tokensDirectory: createConfigItem('/demo', 'tokens-directory'),
     outlineTokens: createConfigItem(true, 'outline-tokens'),
     showTeacherSamples: createConfigItem(false, 'show-teacher-samples'),
-    defaultColors: createConfigItem({ primary: '#000000', secondary: '#ffffff' })
+    labelColors: createConfigItem<string[]>([], 'label-colors')
 } as const;
 
 export type MakerConfig = ConfigValues<typeof globalMakerConfigSchema>;

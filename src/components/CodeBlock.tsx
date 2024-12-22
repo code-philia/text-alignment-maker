@@ -1,6 +1,7 @@
 import { ScrollArea } from '@mantine/core';
 import { useRef, useEffect } from 'react';
 import { removeDocstrings, isSpecialToken, findCommentEnd } from '../utils';
+import { simpleMantineStandardColors } from '../config';
 
 // code block
 function generateHighlightedCode(
@@ -206,9 +207,15 @@ function processSelectionEvents(code: HTMLElement, onTokenSelectionChange?: (sel
         window.removeEventListener('mouseup', onWindowMouseUp);
     };
 }
-const getMantineColor = (colorLiteral: string) => {
-    return `var(--mantine-color-${colorLiteral}-filled)`;
-};
+
+// function resolveColor(colorLiteral: string) {
+//     if (colorLiteral in simpleMantineStandardColors) {
+//         return `var(--mantine-color-${colorLiteral}-filled)`;
+//     }
+    
+//     return colorLiteral;
+// };
+
 function processTokens(code: HTMLElement, groupColors: string[]) {
     const targetSpans: HTMLElement[] = [];
 
@@ -221,7 +228,7 @@ function processTokens(code: HTMLElement, groupColors: string[]) {
     targetSpans.forEach((span) => {
         const labelNumber = getNumberOfElement(span, labelPrefix);
         if (labelNumber !== undefined) {
-            span.style.color = getMantineColor(groupColors[labelNumber]);
+            span.style.color = groupColors[labelNumber];
         }
     });
 }

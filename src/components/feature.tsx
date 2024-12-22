@@ -1,4 +1,4 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge, AspectRatio, Transition } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge, AspectRatio, Transition, ActionIcon, ColorPicker } from '@mantine/core';
 import { IconInfoCircle, IconSettings } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
@@ -7,25 +7,13 @@ import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
 import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
 import { tryStringifyJson } from '../utils';
-import { globalMakerConfigSchema, useSmartConfig } from '../config';
+import { getDefaultLabelColors, globalMakerConfigSchema, useSmartConfig } from '../config';
 
 const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
 const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
 const demoTrainDataFile = 'train.jsonl';
 const demoLabelingFile = 'sorted_labelling_sample_api.jsonl';
 const demoTeacherFile = 'student_teachers_pairs.jsonl';
-
-const standardColors: MantineColor[] = ['green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'dark', 'gray', 'grape', 'violet', 'indigo', 'teal'];
-function generateColorForLabelIndex(index: number) {
-    return standardColors[index % standardColors.length];
-}
-function generateColorForLabels(num: number) {
-    const colors: MantineColor[] = [];
-    for (let i = 0; i < num; i++) {
-        colors.push(generateColorForLabelIndex(i));
-    }
-    return colors;
-}
 
 type DisplayedLabel = {
     text: string;
@@ -108,14 +96,13 @@ export function Feature() {
             content: '',
             onSave: (dumped) => {
                 setDumpedString(dumped);
-                setModalOpened(true);
+                setSaveModalOpened(true);
             }
         })
     );
 
     // Data Saving
     const [dumpedString, setDumpedString] = useState('');
-    const [modalOpened, setModalOpened] = useState(false);
 
     // Loading
     const [loaderOpened, setLoaderOpened] = useState(false);
@@ -166,10 +153,19 @@ export function Feature() {
     const [selectedCodeTokens, setSelectedCodeTokens] = useState<number[]>([]);
     const [selectedCommentTokens, setSelectedCommentTokens] = useState<number[]>([]);
 
+    const generateColorForLabels = useCallback((colors: string[],n: number) => {
+        const l = config.labelColors.length;
+
+        const getColor = l <= 0
+            ? () => '#ffffff'
+            : (v: number, i: number) => colors[i % l];
+        return new Array(n).fill(0).map(getColor);
+    }, []);
+
     const setLabelsWithDefaultColor = (labels: DisplayedLabel[]) => {
         // FIXME should avoid modifying the original object, everywhere?
         labels.forEach((label, i) => {
-            label.color = generateColorForLabelIndex(i);
+            label.color = config.labelColors[i];
         });
         setLabels(labels);
     };
@@ -178,10 +174,10 @@ export function Feature() {
         if (!sampleExists) return;
 
         const numOfLabels = labelingProvider.getNumOfLabelsOnSample(currentIndex);
-        const defaultGeneratedColors = generateColorForLabels(numOfLabels);
+        const defaultGeneratedColors = generateColorForLabels(config.labelColors, numOfLabels);
 
         setLabels(Array(numOfLabels).fill(0).map((_, i) => ({ text: `Label ${i + 1}`, color: defaultGeneratedColors[i] })));
-    }, [sampleExists, currentIndex, labelingProvider]);
+    }, [sampleExists, currentIndex, labelingProvider, config.labelColors]);
 
     const setLabelOfCodeTokens = useCallback((label: number) => {
         setLabelOfTokens(
@@ -228,7 +224,7 @@ export function Feature() {
             content: '',
             onSave: (dumped) => {
                 setDumpedString(dumped);
-                setModalOpened(true);
+                setSaveModalOpened(true);
             }
         }));
 
@@ -471,7 +467,13 @@ export function Feature() {
                 label='Show Teacher Samples'
             />
             <div style={{ flex: 1 }}></div>
-            <Button className='settings-button' variant='transparent' p={0} h={40}>
+            <Button
+                className='settings-button'
+                variant='transparent'
+                p={0}
+                h={40}
+                onClick={() => { setMoreSettingsModalOpened(true); }}
+            >
                 More Settings
                 <Space w='6'></Space>
                 <IconSettings></IconSettings>
@@ -479,10 +481,12 @@ export function Feature() {
         </Group>
     ), [config.outlineTokens, config.showTeacherSamples]);
 
+    const [saveModalOpened, setSaveModalOpened] = useState(false);
+
     const saveLabelingModal = (
         <Modal
-            opened={modalOpened}
-            onClose={() => setModalOpened(false)}
+            opened={saveModalOpened}
+            onClose={() => setSaveModalOpened(false)}
             title="Dumped String"
             size="lg"
         >
@@ -499,7 +503,7 @@ export function Feature() {
                     <Button
                         onClick={() => {
                             navigator.clipboard.writeText(dumpedString);
-                            setModalOpened(false);
+                            setSaveModalOpened(false);
                         }}
                     >Copy</Button>
                 </Group>
@@ -574,7 +578,7 @@ export function Feature() {
                 </Grid>
             </>
         )
-    }, [modalOpened, currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
+    }, [saveModalOpened, currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
 
     // TODO add transition for this
     const textLabelingArea = useMemo(() => (
@@ -712,6 +716,84 @@ export function Feature() {
     //     </TagsInput>
     // });
     
+    useEffect(() => {
+        config.labelColors = getDefaultLabelColors();
+    }, []);
+
+    const [moreSettingsModalOpened, setMoreSettingsModalOpened] = useState(false);
+    const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
+    
+    const lastActiveColor = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        activeColorIndex !== null ? config.labelColors[activeColorIndex] : lastActiveColor.current
+    }, [activeColorIndex])
+
+    const moreSettingsModal = (
+        <Modal
+            opened={moreSettingsModalOpened}
+            onClose={() => {
+                setMoreSettingsModalOpened(false);
+                setActiveColorIndex(null);
+            }}
+            title="More Settings"
+        >
+            <Container p={0}>
+                <Text size="sm" fw={600}>
+                    Label Colors
+                </Text>
+                <Space h='sm'></Space>
+                <Popover
+                    opened={activeColorIndex !== null}
+                    position="bottom"
+                    shadow='xl'
+                    withArrow
+                    trapFocus={false}
+                    closeOnEscape={false}
+                    onClose={() => setActiveColorIndex(null)}
+                >
+                    <Popover.Target>
+                        <Group gap="xs" w='fit-content'>
+                            {config.labelColors.map((color, index) => (
+                                <ActionIcon
+                                    key={index}
+                                    radius="sm"
+                                    variant="filled"
+                                    style={{
+                                        width: '30px',
+                                        height: '30px',
+                                        backgroundColor: color,
+                                        '&:hover': {
+                                            backgroundColor: color,
+                                        },
+                                        ...(index === activeColorIndex ? { border: '3px solid black' } : { outlineOffset: '3px' })
+                                    }}
+                                    onClick={() => {
+                                        index === activeColorIndex ? setActiveColorIndex(null) : setActiveColorIndex(index);
+                                    }}
+                                >
+                                    {index + 1}
+                                </ActionIcon>
+                            ))}
+                        </Group>
+                    </Popover.Target>
+                    <Popover.Dropdown>
+                        <ColorPicker
+                            value={activeColorIndex !== null ? lastActiveColor.current = config.labelColors[activeColorIndex] : lastActiveColor.current}
+                            onChange={(newColor) => {
+                                const newColors = [...config.labelColors];
+                                if (activeColorIndex !== null) {
+                                    newColors[activeColorIndex] = newColor;
+                                }
+                                config.labelColors = newColors;
+                            }}
+                            format="rgba"
+                        />
+                    </Popover.Dropdown>
+                </Popover>
+            </Container>
+        </Modal>
+    );
+
     return (
         <div className={className} style={{ width: '960px' }}>
             { loadingOptions }
@@ -726,6 +808,7 @@ export function Feature() {
             { optionalTeacherSamplesArea }
             
             { saveLabelingModal }
+            { moreSettingsModal }
         </div>
     );
 }
