@@ -1,5 +1,5 @@
 import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge, AspectRatio, Transition, ActionIcon, ColorPicker } from '@mantine/core';
-import { IconInfoCircle, IconSettings } from '@tabler/icons-react';
+import { IconInfoCircle, IconReload, IconSettings } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { CodeBlock } from './CodeBlock';
@@ -8,12 +8,6 @@ import { AlignmentLabels } from './AlignmentLabels';
 import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
 import { tryStringifyJson } from '../utils';
 import { getDefaultLabelColors, globalMakerConfigSchema, useSmartConfig } from '../config';
-
-const demoCompleteCodeTokensFile = 'tokenized_code_tokens_train.jsonl';
-const demoCompleteCommentTokensFile = 'tokenized_comment_tokens_train.jsonl';
-const demoTrainDataFile = 'train.jsonl';
-const demoLabelingFile = 'sorted_labelling_sample_api.jsonl';
-const demoTeacherFile = 'student_teachers_pairs.jsonl';
 
 type DisplayedLabel = {
     text: string;
@@ -240,7 +234,7 @@ export function Feature() {
         (async () => {
 
             const path = config.tokensDirectory.endsWith('/') ? config.tokensDirectory.slice(0, -1) : config.tokensDirectory;
-            const labelingData = await fetch(`/mock${path}/${demoLabelingFile}`)
+            const labelingData = await fetch(`/mock${path}/${config.labelingFile}`)
                 .then((response) => {
                     if (!response.ok) {
                         throw new Error('Cannot fetch labeling file');
@@ -261,13 +255,13 @@ export function Feature() {
 
             // FIXME too long nested, too many parenthesis
             if (labelingData !== undefined) {
-                fetchResponse(config.tokensDirectory, demoTrainDataFile)
+                fetchResponse(config.tokensDirectory, config.fullTextFile)
                     .then(readJsonLinesToList)
                     .then(jsonList => {
                         if (jsonList === undefined) return;
                         const data = jsonList.map((line) => JSON.parse(line.trim()));
 
-                        const loadCode = fetchResponse(config.tokensDirectory, demoCompleteCodeTokensFile)
+                        const loadCode = fetchResponse(config.tokensDirectory, config.completeCodeTokensFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -293,7 +287,7 @@ export function Feature() {
                                     };
                                 }));
                             });
-                        const loadComment = fetchResponse(config.tokensDirectory, demoCompleteCommentTokensFile)
+                        const loadComment = fetchResponse(config.tokensDirectory, config.completeCommentTokensFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -327,7 +321,7 @@ export function Feature() {
                                 setLoaderOpened(false);
                             });
                         
-                        fetchResponse(config.tokensDirectory, demoTeacherFile)
+                        fetchResponse(config.tokensDirectory, config.teacherFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
                                 if (!jsonList) return;
@@ -416,16 +410,16 @@ export function Feature() {
                     <Space h='xs' />
                     <List size='xs' spacing='5'>
                         <List.Item>
-                            A code tokens file:<br/><b>{demoCompleteCodeTokensFile}</b>
+                            A code tokens file:<br/><b>{config.completeCodeTokensFile}</b>
                         </List.Item>
                         <List.Item>
-                            A comment tokens file:<br/><b>{demoCompleteCommentTokensFile}</b>
+                            A comment tokens file:<br/><b>{config.completeCommentTokensFile}</b>
                         </List.Item>
                         <List.Item>
-                            A Training file that contains code and docstring:<br/><b>{demoTrainDataFile}</b>
+                            A data file that contains full text of code and docstring:<br/><b>{config.fullTextFile}</b>
                         </List.Item>
                         <List.Item>
-                            A labeling result file, which as array of labeling applied to a list of samples, will be shown below:<br/><b>{demoLabelingFile}</b>
+                            A labeling result file, which as array of labeling applied to a list of samples, will be shown below:<br/><b>{config.labelingFile}</b>
                         </List.Item>
                     </List>
                 </Text>
@@ -716,18 +710,19 @@ export function Feature() {
     //     </TagsInput>
     // });
     
-    useEffect(() => {
+    const resetLabelColors = useCallback(() => {
         config.labelColors = getDefaultLabelColors();
+    }, [])
+
+    useEffect(() => {
+        if (config.labelColors.length <= 0) {
+            resetLabelColors();
+        }
     }, []);
 
     const [moreSettingsModalOpened, setMoreSettingsModalOpened] = useState(false);
     const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
     
-    const lastActiveColor = useRef<string | undefined>(undefined);
-    useEffect(() => {
-        activeColorIndex !== null ? config.labelColors[activeColorIndex] : lastActiveColor.current
-    }, [activeColorIndex])
-
     const moreSettingsModal = (
         <Modal
             opened={moreSettingsModalOpened}
@@ -736,61 +731,110 @@ export function Feature() {
                 setActiveColorIndex(null);
             }}
             title="More Settings"
+            size='lg'
         >
-            <Container p={0}>
-                <Text size="sm" fw={600}>
-                    Label Colors
-                </Text>
-                <Space h='sm'></Space>
-                <Popover
-                    opened={activeColorIndex !== null}
-                    position="bottom"
-                    shadow='xl'
-                    withArrow
-                    trapFocus={false}
-                    closeOnEscape={false}
-                    onClose={() => setActiveColorIndex(null)}
-                >
-                    <Popover.Target>
-                        <Group gap="xs" w='fit-content'>
-                            {config.labelColors.map((color, index) => (
-                                <ActionIcon
-                                    key={index}
-                                    radius="sm"
-                                    variant="filled"
-                                    style={{
-                                        width: '30px',
-                                        height: '30px',
-                                        backgroundColor: color,
-                                        '&:hover': {
+            <Stack p={0}>
+                <Container p={0} w='100%'>
+                    <Group gap={6} w='fit-content'>
+                        <Text size='sm' fw={600}>Label Colors</Text>
+                        <Button
+                            w={18}
+                            h={18}
+                            p='0'
+                            onClick={resetLabelColors}
+                        >
+                            <IconReload style={{ width: rem(12), height: rem(12) }}/>
+                        </Button>
+                    </Group>
+                    <Space h='sm'></Space>
+                    <Group gap="xs" w='fit-content' justify='flex-start'>
+                        {config.labelColors.map((color, index) => (
+                            <Popover
+                                key={index}
+                                position="bottom"
+                                shadow='xl'
+                                withArrow
+                                closeOnClickOutside
+                                clickOutsideEvents={['mouseup', 'touchend']}
+                                transitionProps={{ duration: 0 }}
+                                onOpen={() => {
+                                    index === activeColorIndex ? setActiveColorIndex(null) : setActiveColorIndex(index);
+                                }}
+                                onClose={() => {
+                                    setActiveColorIndex(null);
+                                }}
+                            >
+                                <Popover.Target>
+                                    <ActionIcon
+                                        radius="sm"
+                                        variant="filled"
+                                        className='custom-color-watch'
+                                        style={{
+                                            width: '30px',
+                                            height: '30px',
                                             backgroundColor: color,
-                                        },
-                                        ...(index === activeColorIndex ? { border: '3px solid black' } : { outlineOffset: '3px' })
-                                    }}
-                                    onClick={() => {
-                                        index === activeColorIndex ? setActiveColorIndex(null) : setActiveColorIndex(index);
-                                    }}
-                                >
-                                    {index + 1}
-                                </ActionIcon>
-                            ))}
-                        </Group>
-                    </Popover.Target>
-                    <Popover.Dropdown>
-                        <ColorPicker
-                            value={activeColorIndex !== null ? lastActiveColor.current = config.labelColors[activeColorIndex] : lastActiveColor.current}
-                            onChange={(newColor) => {
-                                const newColors = [...config.labelColors];
-                                if (activeColorIndex !== null) {
-                                    newColors[activeColorIndex] = newColor;
-                                }
-                                config.labelColors = newColors;
-                            }}
-                            format="rgba"
-                        />
-                    </Popover.Dropdown>
-                </Popover>
-            </Container>
+                                            ...(index === activeColorIndex ? { border: '3px solid black' } : { outlineOffset: '3px' })
+                                        }}
+                                    >
+                                        {index + 1}
+                                    </ActionIcon>
+                                </Popover.Target>
+                                <Popover.Dropdown>
+                                    <ColorPicker
+                                        value={config.labelColors[index]}
+                                        onChange={(newColor) => {
+                                            const newColors = [...config.labelColors];
+                                            if (index !== null) {
+                                                newColors[index] = newColor;
+                                            }
+                                            config.labelColors = newColors;
+                                        }}
+                                        format="rgba"
+                                    />
+                                </Popover.Dropdown>
+                            </Popover>))}
+                    </Group>
+                </Container>
+                <TextInput
+                    label="Full Text File"
+                    placeholder="file that contains full text of code and comments"
+                    value={config.fullTextFile}
+                    onChange={(e) => { config.fullTextFile = e.target.value }}
+                    onFocus={(e) => {e.target.select()}}
+                />
+                <Group p={0} grow justify='space-between'>
+                    <TextInput
+                        label="Code Tokens File"
+                        placeholder="file with code tokens"
+                        value={config.completeCodeTokensFile}
+                        onChange={(e) => { config.completeCodeTokensFile = e.target.value }}
+                        onFocus={(e) => {e.target.select()}}
+                    />
+                    <TextInput
+                        label="Comment Tokens File"
+                        placeholder="file with comment tokens"
+                        value={config.completeCommentTokensFile}
+                        onChange={(e) => { config.completeCommentTokensFile = e.target.value }}
+                        onFocus={(e) => {e.target.select()}}
+                    />
+                </Group>
+                <Group p={0} grow justify='space-between'>
+                    <TextInput
+                        label="Labeling File"
+                        placeholder="file with concrete labeling"
+                        value={config.labelingFile}
+                        onChange={(e) => { config.labelingFile = e.target.value }}
+                        onFocus={(e) => {e.target.select()}}
+                    />
+                    <TextInput
+                        label="Teachers File"
+                        placeholder= "file with teachers information"
+                        value={config.teacherFile}
+                        onChange={(e) => { config.teacherFile = e.target.value }}
+                        onFocus={(e) => {e.target.select()}}
+                    />
+                </Group>
+            </Stack>
         </Modal>
     );
 
