@@ -1,4 +1,4 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge, AspectRatio } from '@mantine/core';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge, AspectRatio, Transition } from '@mantine/core';
 import { IconInfoCircle, IconSettings } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
@@ -529,73 +529,105 @@ export function Feature() {
         </Group>
     ), [optionOutlineTokens, optionShowTeacherSamples]);
 
+    const saveLabelingModal = (
+        <Modal
+            opened={modalOpened}
+            onClose={() => setModalOpened(false)}
+            title="Dumped String"
+            size="lg"
+        >
+            <Container p={0}>
+                <pre style={{ overflow: 'hidden', padding: '0' }}>
+                    <ScrollArea p='16px'>
+                        <code>
+                            {dumpedString}
+                        </code>
+                    </ScrollArea>
+                </pre>
+                <Space h='md' />
+                <Group justify='flex-end'>
+                    <Button
+                        onClick={() => {
+                            navigator.clipboard.writeText(dumpedString);
+                            setModalOpened(false);
+                        }}
+                    >Copy</Button>
+                </Group>
+            </Container>
+        </Modal>
+    );
+
+
     const navigationRow = useMemo(() => {
         return (currentIndex === undefined) ? null : (
-            <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
-                <Grid.Col span={2.8}>
-                    <Group gap='xs' align='center'>
-                        <Popover
-                            position='bottom'
-                            withArrow shadow='md'
-                            trapFocus
-                        >
-                            <Popover.Target>
-                                <Button>
-                                    Go to index
-                                </Button>
-                            </Popover.Target>
-                            <Popover.Dropdown>
-                                <NumberInput
-                                    ref={goToInput}
-                                    value={goToIndex}
-                                    min={0}
-                                    onChange={(value) => setGoToIndex(value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
-                                            handleGoTo();
+            <>
+                <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
+                    <Grid.Col span={2.8}>
+                        <Group gap='xs' align='center'>
+                            <Popover
+                                position='bottom'
+                                withArrow shadow='md'
+                                trapFocus
+                            >
+                                <Popover.Target>
+                                    <Button>
+                                        Go to index
+                                    </Button>
+                                </Popover.Target>
+                                <Popover.Dropdown>
+                                    <NumberInput
+                                        ref={goToInput}
+                                        value={goToIndex}
+                                        min={0}
+                                        onChange={(value) => setGoToIndex(value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
+                                                handleGoTo();
+                                            }
+                                        }}
+                                        error={goToIndexError}
+                                        w='90'
+                                        rightSection={
+                                            <Kbd w='19' h='22' p='0'>
+                                                <Center p='0'>
+                                                    ↵
+                                                </Center>
+                                            </Kbd>
                                         }
-                                    }}
-                                    error={goToIndexError}
-                                    w='90'
-                                    rightSection={
-                                        <Kbd w='19' h='22' p='0'>
-                                            <Center p='0'>
-                                                ↵
-                                            </Center>
-                                        </Kbd>
-                                    }
-                                    rightSectionWidth={34}
-                                    onFocus={() => { goToInput.current?.select(); }}
-                                >
-                                </NumberInput>
-                            </Popover.Dropdown>
-                        </Popover>
-                    </Group>
-                </Grid.Col>
-                <Grid.Col span={6.4}>
-                    <Center>
-                        <NumberNavigation
-                            value={currentLabelingResultIndex}
-                            total={labelingProvider.getSampleIndices().length}
-                            onChangeValue={setCurrentSampleIndex}
-                            tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
-                        />
-                    </Center>
-                </Grid.Col>
-                <Grid.Col span={2.8}>
-                    <Group justify='flex-end'>
-                        <Button
-                            w='11em'
-                            onClick={() => labelingProvider.save()}
-                        >
-                            Save Labeling
-                        </Button>
-                    </Group>
-                </Grid.Col>
-            </Grid>
+                                        rightSectionWidth={34}
+                                        onFocus={() => { goToInput.current?.select(); }}
+                                    >
+                                    </NumberInput>
+                                </Popover.Dropdown>
+                            </Popover>
+                        </Group>
+                    </Grid.Col>
+                    <Grid.Col span={6.4}>
+                        <Center>
+                            <NumberNavigation
+                                value={currentLabelingResultIndex}
+                                total={labelingProvider.getSampleIndices().length}
+                                onChangeValue={setCurrentSampleIndex}
+                                tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
+                            />
+                        </Center>
+                    </Grid.Col>
+                    <Grid.Col span={2.8}>
+                        <Group justify='flex-end'>
+                            <Button
+                                w='11em'
+                                onClick={() => labelingProvider.save()}
+                            >
+                                Save Labeling
+                            </Button>
+                        </Group>
+                    </Grid.Col>
+                </Grid>
+            </>
         )
-    }, [currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
+    }, [modalOpened, currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
 
+    // TODO add transition for this
     const textLabelingArea = useMemo(() => (
         loaderOpened
             ?
@@ -724,30 +756,6 @@ export function Feature() {
     //     </TagsInput>
     // });
     
-    const saveLabelingModal = (
-        <Modal
-            opened={modalOpened}
-            onClose={() => setModalOpened(false)}
-            title="Dumped String"
-            size="lg"
-        >
-            <pre style={{ overflow: 'hidden', padding: '0' }}>
-                <ScrollArea p='10px'>
-                    <code>
-                        {dumpedString}
-                    </code>
-                </ScrollArea>
-            </pre>
-            <Space h='sm' />
-            <Button
-                onClick={() => {
-                    navigator.clipboard.writeText(dumpedString);
-                    setModalOpened(false);
-                }}
-            >Copy</Button>
-        </Modal>
-    );
-
     return (
         <div className={className} style={{ width: '960px' }}>
             { loadingOptions }
