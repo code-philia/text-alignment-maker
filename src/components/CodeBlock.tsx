@@ -83,6 +83,10 @@ function getSelectedNodes(selection: Selection, targetNodes: Node[]) {
 
     for (let i = 0; i < selection.rangeCount; i++) {
         const range = selection.getRangeAt(i);
+        if (range.toString().length <= 0) {
+            continue;
+        }
+
         const startContainer = range.startContainer;
         const endContainer = range.endContainer;
 
@@ -105,6 +109,10 @@ function getSelectedNodes(selection: Selection, targetNodes: Node[]) {
 function expandSelectedRanges(selection: Selection, targetSpans: HTMLElement[]) {
     for (let i = 0; i < selection.rangeCount; i++) {
         const range = selection.getRangeAt(i);
+        if (range.toString().length <= 0) {
+            continue;
+        }
+
         const startContainer = range.startContainer;
         const endContainer = range.endContainer;
 
