@@ -1,12 +1,12 @@
-import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge } from '@mantine/core';
-import { IconInfoCircle } from '@tabler/icons-react';
+import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge, AspectRatio } from '@mantine/core';
+import { IconInfoCircle, IconSettings } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { useCookie } from 'react-use';
 import { CodeBlock } from './CodeBlock';
 import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
-import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data';
+import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
 import { tryStringifyJson } from '../utils';
 
 const demoResultsDirectory = '';
@@ -520,6 +520,12 @@ export function Feature() {
                 onChange={(event) => setOptionShowTeacherSamples(event.currentTarget.checked)}
                 label='Show Teacher Samples'
             />
+            <div style={{ flex: 1 }}></div>
+            <Button className='settings-button' variant='transparent' p={0} h={40}>
+                More Settings
+                <Space w='6'></Space>
+                <IconSettings></IconSettings>
+            </Button>
         </Group>
     ), [optionOutlineTokens, optionShowTeacherSamples]);
 
@@ -639,12 +645,6 @@ export function Feature() {
             ?
             teacherSamplesForCurrentIndex.map(
                 (teacher, i) => {
-                    const teacherSampleComment = getValidSample(rawCommentSamples, teacher.teacher_idx);
-                    const teacherSampleCode = getValidSample(rawCodeSamples, teacher.teacher_idx);
-                    if (!teacherSampleComment || !teacherSampleCode) {
-                        return null;
-                    }
-
                     return (
                         <Container key={i} p='0'>
                             <Stack key={i} gap='0' align='baseline' p='1em 0.1em 0.5em'>

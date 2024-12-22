@@ -83,3 +83,7 @@ code {
 .label-badge.add-label:hover {
   opacity: 0.4
 }
+
+.settings-button:hover {
+  filter: brightness(80%);
+}
