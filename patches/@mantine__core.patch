@@ -1,0 +1,26 @@
+diff --git a/esm/components/ScrollArea/ScrollAreaThumb/ScrollAreaThumb.mjs b/esm/components/ScrollArea/ScrollAreaThumb/ScrollAreaThumb.mjs
+index 72360f82aa9febdf510c3b1ab36d3bdf9e991765..cdf35b66cd10d1f694820a4b334efba0075b986d 100644
+--- a/esm/components/ScrollArea/ScrollAreaThumb/ScrollAreaThumb.mjs
++++ b/esm/components/ScrollArea/ScrollAreaThumb/ScrollAreaThumb.mjs
+@@ -22,7 +22,7 @@ const Thumb = forwardRef((props, forwardedRef) => {
+   const scrollbarContext = useScrollbarContext();
+   const { onThumbPositionChange } = scrollbarContext;
+   const composedRef = useMergedRef(forwardedRef, (node) => scrollbarContext.onThumbChange(node));
+-  const removeUnlinkedScrollListenerRef = useRef(noop);
++  const removeUnlinkedScrollListenerRef = useRef(undefined);
+   const debounceScrollEnd = useDebouncedCallback(() => {
+     if (removeUnlinkedScrollListenerRef.current) {
+       removeUnlinkedScrollListenerRef.current();
+diff --git a/styles.css b/styles.css
+index df49435454351f1893f6277c08f0f5cef1136092..028dc7c56dc2316ffa13091d120a4ce13ae2b8e4 100644
+--- a/styles.css
++++ b/styles.css
+@@ -1271,7 +1271,7 @@ fieldset:disabled .mantine-active:active {
+     z-index: 1001;
+   }
+ 
+-.m_fd1ab0aa:has([data-mantine-scrollbar][data-state='visible']) .m_b5489c3c {
++.m_fd1ab0aa:has(> [data-mantine-scrollbar][data-state='visible']) .m_b5489c3c {
+     padding-inline-end: calc(var(--mb-padding, var(--mantine-spacing-md)) + calc(0.3125rem * var(--mantine-scale)));
+   }
+ 
