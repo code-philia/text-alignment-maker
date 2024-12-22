@@ -127,6 +127,8 @@ export function Feature() {
     const [optionOutlineTokens, setOptionOutlineTokens] = useState(true);
     const [optionShowTeacherSamples, setOptionShowTeacherSamples] = useState(false);
 
+    const [optionDefaultColors, setOptionDefaultColors] = useState(standardColors);
+
     useEffect(() => {
         if (!firstLoaded.current) {
             setCookieOutlineTokens(optionOutlineTokens.toString());
@@ -615,7 +617,6 @@ export function Feature() {
                     <Grid.Col span={2.8}>
                         <Group justify='flex-end'>
                             <Button
-                                w='11em'
                                 onClick={() => labelingProvider.save()}
                             >
                                 Save Labeling
@@ -721,30 +722,37 @@ export function Feature() {
     }, [teacherSamplesForCurrentIndex, rawCodeSamples, rawCommentSamples]);
     
     const teacherSamplesArea = (
-        optionShowTeacherSamples
-            ?
-            <>
-                <Space h='xl'></Space>
-                <Divider></Divider>
-                <Space h='xl'></Space>
-                {
-                    teacherSamplesForCurrentIndex && teacherSamplesForCurrentIndex.length > 0
-                        ?
-                        <Container p='0 1em'>
-                            <Title order={4} style={{ padding: '0 0 0.3em' }}>Teacher Samples</Title>
-                            {teacherSamplesDisplay}
-                        </Container>
-                        :
-                        <Center h='100'>
-                            <Text c='gray'>
-                                No teacher samples
-                            </Text>
-                        </Center>
-                }
-            </>
-            :
-            null
+        <>
+            <Space h='xl'></Space>
+            <Divider></Divider>
+            <Space h='xl'></Space>
+            {
+                teacherSamplesForCurrentIndex && teacherSamplesForCurrentIndex.length > 0
+                    ?
+                    <Container p='0 1em'>
+                        <Title order={4} style={{ padding: '0 0 0.3em' }}>Teacher Samples</Title>
+                        {teacherSamplesDisplay}
+                    </Container>
+                    :
+                    <Center h='100'>
+                        <Text c='gray'>
+                            No teacher samples
+                        </Text>
+                    </Center>
+            }
+        </>
     );
+
+    const optionalTeacherSamplesArea =
+        <Transition
+            mounted={optionShowTeacherSamples}
+            transition="fade"
+            duration={400}
+            timingFunction="ease"
+        >
+            {(styles) => <div style={styles}>{ teacherSamplesArea }</div>}
+        </Transition>
+        ;
 
     // const tagsArea = (
     //     <TagsInput
@@ -767,7 +775,7 @@ export function Feature() {
             { navigationRow }
             <Space h='lg'></Space>
             { textLabelingArea }
-            { teacherSamplesArea }
+            { optionalTeacherSamplesArea }
             
             { saveLabelingModal }
         </div>
