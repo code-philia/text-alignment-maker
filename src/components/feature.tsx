@@ -460,6 +460,8 @@ export function Feature() {
         </Flex>
     ), [config.tokensDirectory, loadFileCallback]);
 
+    const shouldOpenModelQueryModal = sampleExists;
+
     const displayOptions = useMemo(() => (
         <Group>
             <Checkbox
@@ -478,7 +480,7 @@ export function Feature() {
                 variant='transparent'
                 p={0}
                 h={40}
-                onClick={() => { setModelQueryModalOpened(true); }}
+                onClick={() => { shouldOpenModelQueryModal && setModelQueryModalOpened(true); }}
             >
                 Model Query
                 <Space w='6'></Space>
@@ -496,7 +498,7 @@ export function Feature() {
                 <IconSettings></IconSettings>
             </Button>
         </Group>
-    ), [config.outlineTokens, config.showTeacherSamples]);
+    ), [config.outlineTokens, config.showTeacherSamples, shouldOpenModelQueryModal]);
 
     const [saveModalOpened, setSaveModalOpened] = useState(false);
 
@@ -658,18 +660,23 @@ export function Feature() {
             </Center>
     ), [loaderOpened, currentIndex, labels, codeAreaForComment, codeAreaForCode, clickLabelCallback]);
 
+    const getCodeSampleIndices = useMemo(() => {
+        const cache = rawCodeSamples.map((s) => s.index)
+        return () => cache;
+    }, [rawCodeSamples]);
+
     const getTeacherSamples = useCallback((idx: number) => {
         return teachersProvider.getTeachers(idx);
     }, [teachersProvider]);
     
-    const teacherSamplesForCurrentIndex = useMemo(() => {
+    const teacherSamples = useMemo(() => {
         return getTeacherSamples(currentIndex);
     }, [currentIndex, teachersProvider, getTeacherSamples]);
 
     const teacherSamplesDisplay = useMemo(() => {
-        return teacherSamplesForCurrentIndex
+        return teacherSamples
             ?
-            teacherSamplesForCurrentIndex.map(
+            teacherSamples.map(
                 (teacher, i) => {
                     return (
                         <Container key={i} p='0'>
@@ -712,7 +719,7 @@ export function Feature() {
             )
             :
             null;
-    }, [teacherSamplesForCurrentIndex, rawCodeSamples, rawCommentSamples, labelingProvider, labels]);
+    }, [teacherSamples, rawCodeSamples, rawCommentSamples, labelingProvider, labels]);
     
     const teacherSamplesArea = (
         <>
@@ -720,7 +727,7 @@ export function Feature() {
             <Divider></Divider>
             <Space h='xl'></Space>
             {
-                teacherSamplesForCurrentIndex && teacherSamplesForCurrentIndex.length > 0
+                teacherSamples && teacherSamples.length > 0
                     ?
                     <Container p='0 1em'>
                         <Title order={4} style={{ padding: '0 0 0.3em' }}>Teacher Samples</Title>
@@ -933,9 +940,24 @@ export function Feature() {
         </Modal>
     ), [config, moreSettingsModalOpened, activeColorIndex, resetColorPopoverOpened]);
 
-    const getRefSamples = useCallback(() => {
-        if (teacherSamplesForCurrentIndex && teacherSamplesForCurrentIndex.length > 0) {
-            const mappedSamples = teacherSamplesForCurrentIndex
+    const getCodeCommentSample = useCallback((i: number) => {
+        const codeSample = getValidSample(rawCodeSamples, i);
+        const commentSample = getValidSample(rawCommentSamples, i);
+
+        if (codeSample && commentSample) {
+            return {
+                codeTokens: getValidSample(rawCodeSamples, i)!.tokens,
+                commentTokens: getValidSample(rawCommentSamples, i)!.tokens,
+            }
+        }
+        
+        return undefined;
+    }, [rawCodeSamples, rawCommentSamples]);
+
+    const getRefCodeCommentSamples = useCallback((i: number) => {
+        const teacherSamples = getTeacherSamples(i);
+        if (teacherSamples && teacherSamples.length > 0) {
+            const mappedSamples = teacherSamples
                 .map((s) => {
                     const refSample = {
                         codeTokens: getValidSample(rawCodeSamples, s.teacher_idx)?.tokens,
@@ -954,33 +976,36 @@ export function Feature() {
         } else {
             return [];
         }
-    }, [teacherSamplesForCurrentIndex, codeSamples, commentSamples]);
+    }, [teacherSamples, codeSamples, commentSamples]);
+
+    const applyConvertedOutput = useCallback((output: string) => {
+        try {
+            const rawRangeLabeling = JSON.parse(output);
+            const rawIndexLabeling = matchToIndices(rawRangeLabeling);
+            labelingProvider.setRawIndexLabelingOnSample(currentIndex, rawIndexLabeling);
+            setLabelingProvider(labelingProvider.copy());
+        } catch {
+            console.warn(`Cannot apply labeling due to mis-resolution: `, output);
+        }
+    }, [labelingProvider]);
 
     const [modelQueryModalOpened, setModelQueryModalOpened] = useState(false);
-    const modelQueryModal = (
-        sampleExists &&
+
+    const modelQueryModal = useMemo(() => (
+        shouldOpenModelQueryModal &&
         <TokenAlignmentModal
             baseUrl={config.gptApiUrl}
             apiKey={config.openAiApiKey}
             opened={modelQueryModalOpened}
-            sample={{
-                codeTokens: getValidSample(codeSamples, currentIndex)!.tokens,
-                commentTokens: getValidSample(commentSamples, currentIndex)!.tokens,
-            }}
-            refSamples={getRefSamples()}
+            targetIndex={currentIndex}
+            getStudentIndices={getCodeSampleIndices}
+            getTeacherIndices={() => getTeacherSamples(currentIndex)?.map((s) => s.teacher_idx) ?? []}
+            getSample={getCodeCommentSample}
+            getRefSamples={getRefCodeCommentSamples}   // FIXME rewrite all "teacher" samples to "ref" samples
             onClose={() => setModelQueryModalOpened(false)}
-            onApplyConvertedOutput={(output: string) => {
-                try {
-                    const rawRangeLabeling = JSON.parse(output);
-                    const rawIndexLabeling = matchToIndices(rawRangeLabeling);
-                    labelingProvider.setRawIndexLabelingOnSample(currentIndex, rawIndexLabeling);
-                    setLabelingProvider(labelingProvider.copy());
-                } catch {
-                    console.warn(`Cannot apply labeling due to mis-resolution: `, output);
-                }
-            }}
+            onApplyConvertedOutput={applyConvertedOutput}
         />
-    );
+    ), [config, modelQueryModalOpened, currentIndex, getCodeCommentSample, getRefCodeCommentSamples, getTeacherSamples, applyConvertedOutput]);
 
     return (
         <div className={className} style={{ width: '960px' }}>

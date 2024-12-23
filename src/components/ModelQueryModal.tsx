@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     Modal,
     Button,
@@ -13,11 +13,13 @@ import {
     ScrollArea,
     ScrollAreaAutosize,
     Group,
-    Container
+    Container,
+    Select
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { toAlignmentWithIndices, toAlignmentWithUniqueToken, TokenAlignmentService, toUniqueSymbols } from '../data/model';
 import { indicesToMatch } from '../utils';
+import { IconCheck, IconRobot } from '@tabler/icons-react';
 
 export interface CodeCommentSample {
     commentTokens: string[];
@@ -37,21 +39,37 @@ export interface TokenAlignmentModalProps {
     onClose: () => void;
     
     onApplyConvertedOutput?: (output: string) => void;
+    
+    getStudentIndices: () => number[];
+    getTeacherIndices: (i: number) => number[];
+    
+    getSample: (i: number) => CodeCommentSample | undefined;
+    getRefSamples: (i: number) => LabeledCodeCommentSample[];     // NOTE only use the first sample, currently
 
-    sample: CodeCommentSample;
-    refSamples: LabeledCodeCommentSample[];     // NOTE only use the first sample, currently
+    targetIndex: number;
 }
 
-export function TokenAlignmentModal({ apiKey, baseUrl, sample, refSamples, opened, onClose, onApplyConvertedOutput }: TokenAlignmentModalProps) {
-    const [studentIndex, setStudentIndex] = useState<number | ''>(0);
-    const [teacherIndex, setTeacherIndex] = useState<number | ''>(0);
+export function TokenAlignmentModal({
+    apiKey, baseUrl, opened, onClose, onApplyConvertedOutput ,
+    getStudentIndices, getTeacherIndices, getSample, getRefSamples, targetIndex
+}: TokenAlignmentModalProps) {
+    const [studentIndex, setStudentIndex] = useState<number | null>(null);
+    const [teacherIndex, setTeacherIndex] = useState<number | null>(null);
+    const [teacherIndices, setTeacherIndices] = useState<string[]>([]);
+
     const [loading, setLoading] = useState(false);
     const [output, setOutput] = useState<string>('');
     const [convertedOutput, setConvertedOutput] = useState<string>('');
     const [streamingOutput, setStreamingOutput] = useState<string>('');
 
+    useEffect(() => {
+        if (targetIndex !== null) {
+            setStudentIndex(targetIndex);
+        }
+    }, [targetIndex]);
+
     const handleSubmit = async () => {
-        if (studentIndex === '' || teacherIndex === '') {
+        if (studentIndex === null || teacherIndex === null) {
             notifications.show({
                 title: 'Error',
                 message: 'Please enter both indices',
@@ -89,6 +107,9 @@ export function TokenAlignmentModal({ apiKey, baseUrl, sample, refSamples, opene
             //     }
             // ];
 
+            const sample = getSample(studentIndex);
+            if (sample === undefined) return;
+
             const [uniqueStudentCodeTokens, mapOfUniqueStudentCodeTokens] = toUniqueSymbols(sample.codeTokens);
             const [uniqueStudentCommentTokens, mapOfUniqueStudentCommentTokens] = toUniqueSymbols(sample.commentTokens);
             
@@ -97,6 +118,8 @@ export function TokenAlignmentModal({ apiKey, baseUrl, sample, refSamples, opene
                 commentTokens: uniqueStudentCommentTokens
             }
             
+            const refSamples = getRefSamples(studentIndex);
+
             let teacherTokens, teacherAlignments;
             if (refSamples[0]) {
                 const [uniqueTeacherCodeTokens, mapOfUniqueTeacherCodeTokens] = toUniqueSymbols(refSamples[0].codeTokens);
@@ -170,6 +193,14 @@ export function TokenAlignmentModal({ apiKey, baseUrl, sample, refSamples, opene
         }
     };
 
+    useEffect(() => {
+        const teacherIndices = studentIndex ? getTeacherIndices(studentIndex).map(i => `${i}`) : [];
+        setTeacherIndices(teacherIndices);
+
+        const initTeacherIndex = teacherIndices.length > 0 ? teacherIndices[0] : null;
+        setTeacherIndex(initTeacherIndex ? parseInt(initTeacherIndex) : null);
+    }, [getTeacherIndices])
+
     return (
         <Modal
             opened={opened}
@@ -181,24 +212,43 @@ export function TokenAlignmentModal({ apiKey, baseUrl, sample, refSamples, opene
         >
             <ScrollAreaAutosize p='0 1em'>
                 <Stack gap="md" p='0 0 0.5em' w='100%'>
-                    {/* <NumberInput
+                    {/* <Select
                         label="Student Sample Index"
                         placeholder="Enter student index"
-                        value={studentIndex}
-                        onChange={(v) => (typeof v === 'number' && setStudentIndex(v))}
-                        min={0}
-                    />
+                        value={studentIndex ? `${studentIndex}` : null}
+                        data={getStudentIndices().map(i => `${i}`)}
+                        onChange={(v) => {
+                            if (v === null) return;
 
-                    <NumberInput
-                        label="Teacher Sample Index"
-                        placeholder="Enter teacher index"
-                        value={teacherIndex}
-                        onChange={(v) => (typeof v === 'number' && setTeacherIndex(v))}
+                            const i = parseInt(v);
+                            if (!Number.isNaN(i)) {
+                                setStudentIndex(i);
+                            }
+                        }}
                         min={0}
                     /> */}
 
+                    <Select
+                        allowDeselect={false}
+                        label="Teacher Sample Index"
+                        placeholder="Enter teacher index"
+                        data={teacherIndices}
+                        value={`${teacherIndex}`}
+                        onChange={(v) => {
+                            if (v === null) return;
+
+                            const i = parseInt(v);
+                            if (!Number.isNaN(i)) {
+                                setTeacherIndex(i);
+                            }
+                        }}
+                        min={0}
+                    />
+
                     <Button onClick={handleSubmit} loading={loading}>
                         Generate Alignment
+                        <Space w='0.5em'/>
+                        <IconRobot></IconRobot>
                     </Button>
 
                     {streamingOutput && (
@@ -208,7 +258,7 @@ export function TokenAlignmentModal({ apiKey, baseUrl, sample, refSamples, opene
                         </Container>
                     )}
 
-                    <Group p='0' gap='md' justify='center' align='flex-start'>
+                    <Group p='0' gap='lg' justify='center' align='flex-start'>
                         {output && (
                             <Container flex='1' p='0'>
                                 <Text size="sm" fw={500}>Final Response:</Text>
@@ -236,7 +286,9 @@ export function TokenAlignmentModal({ apiKey, baseUrl, sample, refSamples, opene
                                             onClose();
                                         }}
                                     >
-                                        Apply
+                                    Apply
+                                    <Space w='0.3em'/>
+                                    <IconCheck />
                                 </Button>
                             </Stack>
                         )}

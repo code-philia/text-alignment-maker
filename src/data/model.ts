@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { isSpecialToken } from '../utils';
 
 interface TokenPair {
     commentTokens: string[];
@@ -173,7 +174,11 @@ ${alignmentFormat}
     }
 }
 
-export function toUniqueSymbols(tokens: string[], isComment: boolean = true): [string[], Map<string, number>] {
+export function toUniqueSymbols(nlpTokens: string[], isComment: boolean = true): [string[], Map<string, number>] {
+    const tokens = nlpTokens
+        .filter((token) => !isSpecialToken(token))
+        .map((token) => token.replace('\u0120', ''));
+
     const tokenCounts: { [key: string]: number } = {};
     const processedTokens: string[] = [];
     
