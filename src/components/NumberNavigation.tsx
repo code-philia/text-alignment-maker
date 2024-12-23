@@ -30,20 +30,25 @@ export function NumberNavigation({ value, total, onChangeValue, selective, selec
             <Carousel
                 align='start'
                 p='0 50'
+                slideSize='fit-content'
                 slidesToScroll={6}
                 speed={12}
+                w={600}
             >
                 {
                     new Array(total).fill(0).map((_, i) => (
-                        <Button
+                        <Carousel.Slide
                             key={i + 1}
-                            className='number-navigation-button'
-                            variant={isCurrent(i) ? 'filled' : 'transparent'}
-                            color={isCurrent(i) ? 'blue' : 'gray'}
-                            onClick={() => onChangeValue(i)}
                         >
-                            {tags ? tags[i] : i + 1}
-                        </Button>
+                            <Button
+                                className='number-navigation-button'
+                                variant={isCurrent(i) ? 'filled' : 'transparent'}
+                                color={isCurrent(i) ? 'blue' : 'gray'}
+                                onClick={() => onChangeValue(i)}
+                            >
+                                {tags ? tags[i] : i + 1}
+                            </Button>
+                        </Carousel.Slide>
                     ))
                 }
             </Carousel>
