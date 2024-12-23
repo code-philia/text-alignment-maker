@@ -149,7 +149,7 @@ export function Feature() {
     const [selectedCommentTokens, setSelectedCommentTokens] = useState<number[]>([]);
 
     const generateColorForLabels = useCallback((colors: string[],n: number) => {
-        const l = config.labelColors.length;
+        const l = colors.length;
 
         const getColor = l <= 0
             ? () => '#ffffff'
