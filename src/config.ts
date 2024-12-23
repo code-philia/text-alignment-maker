@@ -5,6 +5,7 @@ import { useCookie } from 'react-use';
 interface ConfigItemDefinition<T> {
     default: T;
     cookieKey?: string;
+    mountedFallback?: (value: T | null) => T;
 }
 
 type ConfigSchema = {
@@ -25,10 +26,11 @@ interface CookieRef {
     remover: () => void;
 }
 
-function createConfigItem<T>(defaultValue: T, cookieKey?: string): ConfigItemDefinition<T> {
+function createConfigItem<T>(defaultValue: T, cookieKey?: string, mountedFallback?: (value: T | null) => T): ConfigItemDefinition<T> {
     return {
         default: defaultValue,
-        cookieKey
+        cookieKey,
+        mountedFallback
     };
 }
 
@@ -36,11 +38,9 @@ function useWritableConfig<T extends { [keys: string]: any }>(
     state: T,
     setter: (property: string, value: any) => void
 ) {
-    // 创建可写的基础对象
     const baseObject = useMemo(() => {
         const obj = {} as T;
         
-        // 为每个属性设置可写的描述符
         Object.keys(state).forEach(key => {
             Object.defineProperty(obj, key, {
                 value: state[key],
@@ -53,7 +53,6 @@ function useWritableConfig<T extends { [keys: string]: any }>(
         return obj;
     }, [state]);
 
-    // 创建 Proxy
     const configProxy = useMemo(() => new Proxy(baseObject, {
         set(target, property: string, value) {
             if (property in target) {
@@ -89,39 +88,48 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
     });
 
     useEffect(() => {
-        if (firstLoaded.current) {
-            setState(produce((draft: any) => {
-                Object.entries(cookieRefs.current).forEach(([key, { value }]) => {
-                    if (value !== null) {
-                        const schemaItem = schema[key as keyof T];
-                        const schemaType = typeof schemaItem.default;
-
-                        if (schemaType === 'boolean') {
-                            (draft)[key] = value === 'true';
-                        } else {
-                            try {
-                                (draft)[key] = schemaType === 'object'
-                                    ? JSON.parse(value)
-                                    : value;
-                            } catch {
-                                (draft)[key] = value;
-                            }
-                        }
-                    }
-                });
-            }));
-            firstLoaded.current = false;
-        }
-    }, [schema]);
-
-    useEffect(() => {
         if (!firstLoaded.current) {
             Object.entries(cookieRefs.current).forEach(([key, { setter }]) => {
                 const value = state[key as keyof T];
                 setter(typeof value === 'object' ? JSON.stringify(value) : String(value));
             });
         }
-    }, [state]);
+    }, [state]);    // PITFALL this should be done before the next useEffect, prevent firstLoaded from being set false
+
+    useEffect(() => {
+        if (firstLoaded.current) {
+            setState(produce((draft: any) => {
+                Object.entries(cookieRefs.current).forEach(([key, { value }]) => {
+                    let process = schema[key]?.mountedFallback;
+                    if (!process) {
+                        process = (x) => x;     // pass through
+                    }
+
+                    if (value !== null) {
+                        const schemaItem = schema[key as keyof T];
+                        const schemaType = typeof schemaItem.default;
+
+                        if (schemaType === 'boolean') {
+                            (draft)[key] = process(value === 'true');
+                        } else {
+                            try {
+                                (draft)[key] = process(
+                                    schemaType === 'object'
+                                        ? JSON.parse(value)
+                                        : value
+                                    );
+                            } catch {
+                                (draft)[key] = process(value);
+                            }
+                        } 
+                    } else {
+                        (draft)[key] = process((draft)[key]);
+                    }
+                });
+            }));
+            firstLoaded.current = false;
+        }
+    }, [schema]);   // PITFALL this is setState after the first render !!! and before the resetting of label colors in feature.tsx
 
     const setter = useCallback((property: string, value: any) => {
         setState(produce((draft: any) => {
@@ -149,7 +157,12 @@ export const globalMakerConfigSchema = {
     tokensDirectory: createConfigItem('/demo', 'tokens-directory'),
     outlineTokens: createConfigItem(true, 'outline-tokens'),
     showTeacherSamples: createConfigItem(false, 'show-teacher-samples'),
-    labelColors: createConfigItem<string[]>([], 'label-colors'),
+    labelColors: createConfigItem<string[]>([], 'label-colors', (v) => {
+        if (v === null || v.length === 0) {
+            return getDefaultLabelColors(); 
+        }
+        return v;
+    }),
 
     completeCodeTokensFile: createConfigItem('tokenized_code_tokens_train.jsonl', 'complete-code-tokens-file'),
     completeCommentTokensFile: createConfigItem('tokenized_comment_tokens_train.jsonl', 'complete-comment-tokens-file'),

@@ -750,12 +750,6 @@ export function Feature() {
         config.labelColors = getDefaultLabelColors();
     }, [])
 
-    useEffect(() => {
-        if (config.labelColors.length <= 0) {
-            resetLabelColors();
-        }
-    }, []);
-
     const [moreSettingsModalOpened, setMoreSettingsModalOpened] = useState(false);
     const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
 
