@@ -1,4 +1,4 @@
-import { matchToIndices, indicesToMatch } from '../utils';
+import { matchToIndices, indicesToMatch, deepCopyNestedArrays } from '../utils';
 
 // const lorem = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
 export type LabeledTextSample = {
@@ -10,10 +10,12 @@ export type LabeledTextSample = {
 export const commentGroup = 0;
 export const codeGroup = 1;
 type LabelingProviderOptions = {
-    indicesMap?: Map<number, number[][][]>;
+    copied?: LabelingProvider;
     content?: string;
     onSave?: (dumped: string) => void;
 };
+
+// TODO split this into sample-wise
 export class LabelingProvider {
     listOfSampleLabelGroupIndices: {
         idx: number;
@@ -23,11 +25,15 @@ export class LabelingProvider {
     private sampleLabelGroupTokens: Map<number, number[][][]> = new Map();
     private onSave?: (dumped: string) => void;
 
+    private originalSampleLabelGroupTokens: Map<number, number[][][]> = new Map();
+
     // suppose the first group is comment and the second group is code
-    constructor({ indicesMap, content, onSave }: LabelingProviderOptions) {
-        if (indicesMap) {
-            this.sampleLabelGroupTokens = indicesMap;
-            this.loadMapToList();
+    constructor({ copied, content, onSave }: LabelingProviderOptions) {
+        if (copied) {
+            this.sampleIndices = copied.sampleIndices
+            this.sampleLabelGroupTokens = copied.sampleLabelGroupTokens;
+            this.originalSampleLabelGroupTokens = copied.originalSampleLabelGroupTokens;
+            this.onSave = copied.onSave;
         } else if (content) {
             this.load(content);
         }
@@ -39,8 +45,7 @@ export class LabelingProvider {
     copy() {
         return new LabelingProvider(
             {
-                indicesMap: new Map(this.sampleLabelGroupTokens),
-                onSave: this.onSave
+                copied: this
             }
         );
     }
@@ -140,6 +145,8 @@ export class LabelingProvider {
 
         indicesOfSampleByLabelByGroup.length = 0;
         indicesOfSampleByLabelByGroup.push(...newIndices);
+
+        // TODO auto remove and shift labels (keep color) if both groups have no indices
     }
 
     // TODO A question, using sample as number? Should be sampleIndex? :)
@@ -169,6 +176,26 @@ export class LabelingProvider {
             }
         });
         this.loadMapToList();
+
+        this.originalSampleLabelGroupTokens = new Map();
+        for (const [k, v] of this.sampleLabelGroupTokens.entries()) {
+            this.originalSampleLabelGroupTokens.set(k, deepCopyNestedArrays(v));    // TODO find a library that specifically serve deep copying
+        }
+    }
+
+    resetSample(sample: number) {
+        const target = this.originalSampleLabelGroupTokens.get(sample);
+        const originalSampleLabeling = target ? deepCopyNestedArrays(target) : [];     // TODO don't use this random array, use an object to manipulate it
+        this.sampleLabelGroupTokens.set(sample, originalSampleLabeling);
+    }
+
+    clearAllLabelsForSample(sample: number) {
+        const indicesOfSample = this.sampleLabelGroupTokens.get(sample);
+        if (!indicesOfSample) {
+            return;
+        }
+
+        this.sampleLabelGroupTokens.set(sample, []);
     }
 
     loadMapToList() {

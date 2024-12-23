@@ -13,6 +13,10 @@ export function tryStringifyJson(target: any): string | undefined {
     }
 }
 
+export function deepCopyNestedArrays(target: any) {
+    return JSON.parse(JSON.stringify(target));
+}
+
 // NLP specific 
 
 export function matchToIndices(match: number[][][]): number[][][] {

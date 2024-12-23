@@ -199,11 +199,17 @@ export function Feature() {
     }, [currentLabelingResultIndex, selectedCommentTokens, commentSamples, labelingProvider]);
 
     const clickLabelCallback = (label: number) => {
+        const codeSelection = selectedCodeTokens.slice();
+        const commentSelection = selectedCommentTokens.slice();
+
         if (selectedCodeTokens.length > 0) {
             setLabelOfCodeTokens(label);
+            setSelectedCodeTokens(codeSelection);
         }
+
         if (selectedCommentTokens.length > 0) {
             setLabelOfCommentTokens(label);
+            setSelectedCommentTokens(commentSelection);
         }
     };
 
@@ -564,7 +570,7 @@ export function Feature() {
                     <Grid.Col span={2.8}>
                         <Group justify='flex-end'>
                             <Button
-                                onClick={() => labelingProvider.save()}
+                                onClick={() => labelingProvider.save()}     // TODO don't use labelingProvider.onSave(), it is causing cyclic calling
                             >
                                 Save Labeling
                             </Button>
@@ -574,6 +580,29 @@ export function Feature() {
             </>
         )
     }, [saveModalOpened, currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
+
+    const operationRow = useMemo(() => {
+        return (
+            <Group justify='center'>
+                <Button
+                    onClick={() => {
+                        labelingProvider.clearAllLabelsForSample(currentIndex);
+                        setLabelingProvider(labelingProvider.copy());
+                    }}
+                >
+                    Clear All Labels
+                </Button>
+                <Button
+                    onClick={() => {
+                        labelingProvider.resetSample(currentIndex);
+                        setLabelingProvider(labelingProvider.copy());
+                    }}
+                >
+                    Reset Current Sample
+                </Button>
+            </Group>
+        )
+    }, [labelingProvider, currentIndex]);
 
     // TODO add transition for this
     const textLabelingArea = useMemo(() => (
@@ -591,7 +620,7 @@ export function Feature() {
             <Container p='0'>
                 <Center>
                     <AlignmentLabels
-                        labels={labels}
+                        labels={labels}     // TODO show number of tokens under labels, and highlight and mention those has no token
                         setLabels={setLabelsWithDefaultColor}
                         onClickLabel={clickLabelCallback}
                     />
@@ -603,6 +632,8 @@ export function Feature() {
                         {codeAreaForCode}
                     </Group>
                 </Container>
+                <Space h='lg'></Space>
+                { operationRow }    
             </Container>
             :
             <Center h='300'>
