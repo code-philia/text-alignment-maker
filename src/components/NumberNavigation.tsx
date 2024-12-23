@@ -31,6 +31,7 @@ export function NumberNavigation({ value, total, onChangeValue, selective, selec
                 align='start'
                 p='0 50'
                 slideSize='fit-content'
+                draggable={false}
                 slidesToScroll={6}
                 speed={12}
                 w={600}
