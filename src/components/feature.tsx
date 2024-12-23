@@ -416,7 +416,7 @@ export function Feature() {
                 </Button>
             </HoverCard.Target>
             <HoverCard.Dropdown style={{ padding: '1.5em' }}>
-                <Text size='xs'>
+                <Container p='0' size='xs'>
                     The following files are required:
                     <Space h='xs' />
                     <List size='xs' spacing='5'>
@@ -433,7 +433,7 @@ export function Feature() {
                             A labeling result file, which as array of labeling applied to a list of samples, will be shown below:<br/><b>{config.labelingFile}</b>
                         </List.Item>
                     </List>
-                </Text>
+                </Container>
             </HoverCard.Dropdown>
         </HoverCard>
     );
