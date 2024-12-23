@@ -737,7 +737,7 @@ export function Feature() {
             title="More Settings"
             size='lg'
         >
-            <Stack p={0}>
+            <Stack p='0 0 1em'>
                 <Container p={0} w='100%'>
                     <Group gap={6} w='fit-content'>
                         <Text size='sm' fw={600}>Label Colors</Text>
