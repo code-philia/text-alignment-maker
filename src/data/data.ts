@@ -75,6 +75,14 @@ export class LabelingProvider {
         }
     }
 
+    getLabelingOnSample(sample: number) {
+        return this.sampleLabelGroupTokens.get(sample);
+    }
+
+    setRawIndexLabelingOnSample(sample: number, rawRangeLabeling: number[][][]) {
+        this.sampleLabelGroupTokens.set(sample, rawRangeLabeling);
+    }
+
     getNumOfLabelsOnSample(sample: number) {
         return this.sampleLabelGroupTokens.get(sample)?.length ?? 0;
     }

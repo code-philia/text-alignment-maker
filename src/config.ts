@@ -168,7 +168,10 @@ export const globalMakerConfigSchema = {
     completeCommentTokensFile: createConfigItem('tokenized_comment_tokens_train.jsonl', 'complete-comment-tokens-file'),
     fullTextFile: createConfigItem('train.jsonl', 'train-data-file'),
     labelingFile: createConfigItem('sorted_labelling_sample_api.jsonl', 'labeling-file'),
-    teacherFile: createConfigItem('student_teachers_pairs.jsonl', 'teacher-file')
+    teacherFile: createConfigItem('student_teachers_pairs.jsonl', 'teacher-file'),
+
+    gptApiUrl: createConfigItem('/', 'gpt-api-url'),
+    openAiApiKey: createConfigItem('', 'open-ai-api-key')
 } as const;
 
 export type MakerConfig = ConfigValues<typeof globalMakerConfigSchema>;

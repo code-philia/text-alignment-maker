@@ -1,14 +1,15 @@
 import { Button, Flex, rem, ScrollArea, Space, TextInput, Group, Checkbox, Center, Modal, MantineColor, HoverCard, Text, List, Loader, Stack, NumberInput, Grid, Divider, Container, Title, Kbd, Popover, Badge, AspectRatio, Transition, ActionIcon, ColorPicker } from '@mantine/core';
-import { IconInfoCircle, IconReload, IconSettings } from '@tabler/icons-react';
+import { IconInfoCircle, IconReload, IconRobot, IconSettings } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import 'highlight.js/styles/atom-one-light.min.css';
 import { CodeBlock } from './CodeBlock';
 import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
 import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
-import { tryStringifyJson } from '../utils';
+import { matchToIndices, tryStringifyJson } from '../utils';
 import { getDefaultLabelColors, globalMakerConfigSchema, useSmartConfig } from '../config';
 import { useClickOutside } from '@mantine/hooks';
+import { LabeledCodeCommentSample, TokenAlignmentModal } from './ModelQueryModal';
 
 type DisplayedLabel = {
     text: string;
@@ -477,6 +478,17 @@ export function Feature() {
                 variant='transparent'
                 p={0}
                 h={40}
+                onClick={() => { setModelQueryModalOpened(true); }}
+            >
+                Model Query
+                <Space w='6'></Space>
+                <IconRobot></IconRobot>
+            </Button>
+            <Button
+                className='settings-button'
+                variant='transparent'
+                p={0}
+                h={40}
                 onClick={() => { setMoreSettingsModalOpened(true); }}
             >
                 More Settings
@@ -497,7 +509,7 @@ export function Feature() {
         >
             <Container p={0}>
                 <pre style={{ overflow: 'hidden', padding: '0' }}>
-                    <ScrollArea p='16px'>
+                    <ScrollArea p='16px' h='60vh'>
                         <code>
                             {dumpedString}
                         </code>
@@ -515,7 +527,6 @@ export function Feature() {
             </Container>
         </Modal>
     );
-
 
     const navigationRow = useMemo(() => {
         return (currentIndex === undefined) ? null : (
@@ -701,7 +712,7 @@ export function Feature() {
             )
             :
             null;
-    }, [teacherSamplesForCurrentIndex, rawCodeSamples, rawCommentSamples]);
+    }, [teacherSamplesForCurrentIndex, rawCodeSamples, rawCommentSamples, labelingProvider, labels]);
     
     const teacherSamplesArea = (
         <>
@@ -756,7 +767,7 @@ export function Feature() {
     const [resetColorPopoverOpened, setResetColorPopoverOpened] = useState(false);
     const resetColorPopoverRef = useClickOutside(() => setResetColorPopoverOpened(false));
     
-    const moreSettingsModal = (
+    const moreSettingsModal = useMemo(() => (
         <Modal
             opened={moreSettingsModalOpened}
             onClose={() => {
@@ -788,7 +799,7 @@ export function Feature() {
                                     p='0'
                                     onClick={() => setResetColorPopoverOpened(true)}
                                 >
-                                    <IconReload style={{ width: rem(12), height: rem(12) }}/>
+                                    <IconReload style={{ width: rem(12), height: rem(12) }} />
                                 </Button>
                             </Popover.Target>
                             <Popover.Dropdown ref={resetColorPopoverRef} p='6px 6px'>
@@ -859,47 +870,116 @@ export function Feature() {
                             </Popover>))}
                     </Group>
                 </Container>
-                <TextInput
-                    label="Full Text File"
-                    placeholder="file that contains full text of code and comments"
-                    value={config.fullTextFile}
-                    onChange={(e) => { config.fullTextFile = e.target.value }}
-                    onFocus={(e) => {e.target.select()}}
-                />
-                <Group p={0} grow justify='space-between'>
+                <Container p={0} w='100%'>
+                    <Title order={4} p='0.2em 0'>File Names</Title>
                     <TextInput
-                        label="Code Tokens File"
-                        placeholder="file with code tokens"
-                        value={config.completeCodeTokensFile}
-                        onChange={(e) => { config.completeCodeTokensFile = e.target.value }}
-                        onFocus={(e) => {e.target.select()}}
+                        label="Full Text File"
+                        placeholder="file that contains full text of code and comments"
+                        value={config.fullTextFile}
+                        onChange={(e) => { config.fullTextFile = e.target.value }}
+                        onFocus={(e) => { e.target.select() }}
+                    />
+                    <Group p={0} grow justify='space-between'>
+                        <TextInput
+                            label="Code Tokens File"
+                            placeholder="file with code tokens"
+                            value={config.completeCodeTokensFile}
+                            onChange={(e) => { config.completeCodeTokensFile = e.target.value }}
+                            onFocus={(e) => { e.target.select() }}
+                        />
+                        <TextInput
+                            label="Comment Tokens File"
+                            placeholder="file with comment tokens"
+                            value={config.completeCommentTokensFile}
+                            onChange={(e) => { config.completeCommentTokensFile = e.target.value }}
+                            onFocus={(e) => { e.target.select() }}
+                        />
+                    </Group>
+                    <Group p={0} grow justify='space-between'>
+                        <TextInput
+                            label="Labeling File"
+                            placeholder="file with concrete labeling"
+                            value={config.labelingFile}
+                            onChange={(e) => { config.labelingFile = e.target.value }}
+                            onFocus={(e) => { e.target.select() }}
+                        />
+                        <TextInput
+                            label="Teachers File"
+                            placeholder="file with teachers information"
+                            value={config.teacherFile}
+                            onChange={(e) => { config.teacherFile = e.target.value }}
+                            onFocus={(e) => { e.target.select() }}
+                        />
+                    </Group>
+                </Container>
+                <Container p={0} w='100%'>
+                    <Title order={4} p='0.2em 0'>OpenAI Settings</Title>
+                    <TextInput
+                        label="Model API URL"
+                        placeholder="address of OpenAI model API"
+                        value={config.gptApiUrl}
+                        onChange={(e) => { config.gptApiUrl = e.target.value }}
+                        onFocus={(e) => { e.target.select() }}
                     />
                     <TextInput
-                        label="Comment Tokens File"
-                        placeholder="file with comment tokens"
-                        value={config.completeCommentTokensFile}
-                        onChange={(e) => { config.completeCommentTokensFile = e.target.value }}
-                        onFocus={(e) => {e.target.select()}}
+                        label="OpenAI API Key"
+                        placeholder="a valid API key"
+                        value={config.openAiApiKey}
+                        onChange={(e) => { config.openAiApiKey = e.target.value }}
+                        onFocus={(e) => { e.target.select() }}
                     />
-                </Group>
-                <Group p={0} grow justify='space-between'>
-                    <TextInput
-                        label="Labeling File"
-                        placeholder="file with concrete labeling"
-                        value={config.labelingFile}
-                        onChange={(e) => { config.labelingFile = e.target.value }}
-                        onFocus={(e) => {e.target.select()}}
-                    />
-                    <TextInput
-                        label="Teachers File"
-                        placeholder= "file with teachers information"
-                        value={config.teacherFile}
-                        onChange={(e) => { config.teacherFile = e.target.value }}
-                        onFocus={(e) => {e.target.select()}}
-                    />
-                </Group>
+                </Container>
             </Stack>
         </Modal>
+    ), [config, moreSettingsModalOpened, activeColorIndex, resetColorPopoverOpened]);
+
+    const getRefSamples = useCallback(() => {
+        if (teacherSamplesForCurrentIndex && teacherSamplesForCurrentIndex.length > 0) {
+            const mappedSamples = teacherSamplesForCurrentIndex
+                .map((s) => {
+                    const refSample = {
+                        codeTokens: getValidSample(rawCodeSamples, s.teacher_idx)?.tokens,
+                        commentTokens: getValidSample(rawCommentSamples, s.teacher_idx)?.tokens,
+                        labeling: labelingProvider.getLabelingOnSample(s.teacher_idx)
+                    }
+                    if (refSample.codeTokens && refSample.commentTokens && refSample.labeling) {
+                        return refSample as LabeledCodeCommentSample;
+                    } else {
+                        return undefined;
+                    }
+                })
+                .filter((r) => r !== undefined);
+            
+            return mappedSamples;
+        } else {
+            return [];
+        }
+    }, [teacherSamplesForCurrentIndex, codeSamples, commentSamples]);
+
+    const [modelQueryModalOpened, setModelQueryModalOpened] = useState(false);
+    const modelQueryModal = (
+        sampleExists &&
+        <TokenAlignmentModal
+            baseUrl={config.gptApiUrl}
+            apiKey={config.openAiApiKey}
+            opened={modelQueryModalOpened}
+            sample={{
+                codeTokens: getValidSample(codeSamples, currentIndex)!.tokens,
+                commentTokens: getValidSample(commentSamples, currentIndex)!.tokens,
+            }}
+            refSamples={getRefSamples()}
+            onClose={() => setModelQueryModalOpened(false)}
+            onApplyConvertedOutput={(output: string) => {
+                try {
+                    const rawRangeLabeling = JSON.parse(output);
+                    const rawIndexLabeling = matchToIndices(rawRangeLabeling);
+                    labelingProvider.setRawIndexLabelingOnSample(currentIndex, rawIndexLabeling);
+                    setLabelingProvider(labelingProvider.copy());
+                } catch {
+                    console.warn(`Cannot apply labeling due to mis-resolution: `, output);
+                }
+            }}
+        />
     );
 
     return (
@@ -917,6 +997,7 @@ export function Feature() {
             
             { saveLabelingModal }
             { moreSettingsModal }
+            { modelQueryModal }
         </div>
     );
 }

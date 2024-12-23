@@ -268,7 +268,7 @@ export function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, sele
         if (codeRef.current) {
             generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices);
             processTokens(codeRef.current, groupColors);
-            restoreSelection(codeRef.current, selected);
+            restoreSelection(codeRef.current, selected);    // FIXME this is not restoring actual selection. either don't rerender or manually set actual selection range
             return processSelectionEvents(codeRef.current, onTokenSelectionChange);
         }
     }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);

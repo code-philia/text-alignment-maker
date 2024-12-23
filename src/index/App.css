@@ -91,3 +91,7 @@ code {
 .custom-color-watch:hover {
   box-shadow: 1px 0 6px rgba(0, 0, 0, 0.1)
 }
+
+.mantine-Modal-content {
+  overflow: hidden;
+}
