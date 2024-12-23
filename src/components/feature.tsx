@@ -347,13 +347,14 @@ export function Feature() {
     }, [labelingProvider, config.tokensDirectory]);  // FIXME is nested useCallback ugly?
 
     // Code Area
-    const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: DisplayedLabel[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
+    const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: DisplayedLabel[], selected: number[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
         return (
             <CodeBlock
                 code={sample.text ?? ''}
                 tokens={sample.tokens ?? []}
                 groupedTokenIndices={labelingRanges}
                 groupColors={labels.map((label) => label.color)}
+                selected={selected}
                 onTokenSelectionChange={onTokenSelectionChange}
             />
         );
@@ -368,15 +369,17 @@ export function Feature() {
         const sample = getValidSample(group === codeGroup ? rawCodeSamples : rawCommentSamples, index);
         return codeAreaForSample(
             sample!,
-            labelingProvider.getTokensOnGroup(index, group) ?? []
+            labelingProvider.getTokensOnGroup(index, group) ?? [],
+            []
         );
     };
 
-    const codeAreaForSample = (sample: LabeledTextSample | undefined, labelingRanges: number[][], selectionCallback: typeof setSelectedCodeTokens = () => { }) => {
+    const codeAreaForSample = (sample: LabeledTextSample | undefined, labelingRanges: number[][], selected: number[], selectionCallback: typeof setSelectedCodeTokens = () => { }) => {
         return sample ? codeArea(
             sample,
             labelingRanges,
             labels,
+            selected,
             selectionCallback
         ) : null;
     };
@@ -390,6 +393,7 @@ export function Feature() {
         return codeAreaForSample(
             sample!,
             labelingProvider.getTokensOnGroup(currentIndex, group) ?? [],
+            group === codeGroup ? selectedCodeTokens : selectedCommentTokens,
             group === codeGroup ? setSelectedCodeTokens : setSelectedCommentTokens
         );
     };

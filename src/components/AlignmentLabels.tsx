@@ -37,7 +37,10 @@ export function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentL
                             <Badge
                                 color='black'
                                 className='label-badge remove-label'
-                                onMouseDown={() => onClickLabel?.(-1)}
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    onClickLabel?.(-1);
+                                }}
                             >
                                 Remove Label
                             </Badge>
@@ -55,7 +58,10 @@ export function AlignmentLabels({ labels, setLabels, onClickLabel } : AlignmentL
                             color={label.color}
                             variant="filled"
                             className='label-badge'
-                            onMouseDown={() => onClickLabel?.(index)}
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                onClickLabel?.(index);
+                            }}
                         >
                             {label.text}
                         </Badge>

@@ -149,7 +149,20 @@ function getNumberOfElement(element: HTMLElement, prefix: string) {
     }
     return undefined;
 }
-;
+
+function restoreSelection(code: HTMLElement, selected: number[]) {
+    const selectedSet = new Set(selected);
+    const allSpans = code.querySelectorAll('span');
+
+    allSpans.forEach((span, i) => {
+        if (selectedSet.has(i)) {
+            span.classList.add('selected');
+        } else {
+            span.classList.remove('selected');
+        }
+    });
+}
+
 function processSelectionEvents(code: HTMLElement, onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) {
 
     // deal with selected spans style changing
@@ -245,15 +258,17 @@ type CodeBlockProps = {
     tokens: string[];
     groupedTokenIndices: number[][];
     groupColors: string[];
+    selected: number[];
     onTokenSelectionChange?: (selectedTokenIndices: number[]) => void;
 };
-export function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, onTokenSelectionChange }: CodeBlockProps) {
+export function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, selected, onTokenSelectionChange }: CodeBlockProps) {
     const codeRef = useRef<HTMLPreElement>(null);
 
     useEffect(() => {
         if (codeRef.current) {
             generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices);
             processTokens(codeRef.current, groupColors);
+            restoreSelection(codeRef.current, selected);
             return processSelectionEvents(codeRef.current, onTokenSelectionChange);
         }
     }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);
