@@ -30,6 +30,16 @@ export function indicesToMatch(indices: number[][][]): number[][][] {
     );
 }
 
+// experiment data specific
+
+export function isSpecialToken(token: string) {
+    return token.startsWith('<') && token.endsWith('>');
+}
+export function removeDocstrings(code: string): string {
+    code = code.replace(/""".*?"""/gs, '');
+    code = code.replace(/'''.*?'''/gs, '');
+    return code;
+}
 export function findCommentEnd(s: string, pos: number): number {
     let i = pos;
 
@@ -46,16 +56,6 @@ export function findCommentEnd(s: string, pos: number): number {
     return i;
 }
 
-// experiment data specific
-
-export function isSpecialToken(token: string) {
-    return token.startsWith('<') && token.endsWith('>');
-}
-export function removeDocstrings(code: string): string {
-    code = code.replace(/""".*?"""/gs, '');
-    code = code.replace(/'''.*?'''/gs, '');
-    return code;
-}
 class RangesArrayOfToken {
     value: number[];
 

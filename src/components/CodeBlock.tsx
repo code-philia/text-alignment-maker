@@ -36,8 +36,9 @@ function generateHighlightedCode(
             const tokenInText = originalText.slice(pos, pos + length);
             const span = document.createElement("span");
 
-            const labelNumber = tokenToLabel.get(tokenIndex);
             span.classList.add(`token-${tokenIndex}`);
+            
+            const labelNumber = tokenToLabel.get(tokenIndex);
             if (labelNumber !== undefined) {
                 span.classList.add(`label-${labelNumber}`);
             }
