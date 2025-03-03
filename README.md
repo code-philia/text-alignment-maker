@@ -29,9 +29,12 @@ pnpm i
 pnpm run dev
 ```
 
-## Note
+## Specification
 
-**Limited to string size in Web App, only `jsonl` files are accepted.**
+> [!NOTE] 
+> Download the ZIP archive of a sample data folder [here](https://drive.google.com/file/d/1KXnlEHcB2hOgspZu-SxuAdzUszXwVFg8/view?usp=sharing) for reference.
+
+**Limited to string size when executing JavaScript in the browser, only `jsonl` files are accepted.**
 
 The following files are required (each line is a sample):
 
