@@ -276,3 +276,20 @@ export class TeachersRelationshipProvider {
         return this.teachers.get(idx);
     }
 }
+
+export type HighlightSample = {
+    /* sample index */
+    index: number;
+    /* [group][0 as code, 1 as nl][token indices] */
+    highlightTokenIndices: number[][][];
+    /* [group][0 as code, 1 as nl][token scores] */
+    highlightTokenScores: number[][][];
+}
+
+// export class HighlightProvider {
+//     private highlightSample: HighlightSample[] = [];
+    
+//     constructor(samples: HighlightSample[]) {
+//         this.highlightSample = samples;
+//     }
+// }

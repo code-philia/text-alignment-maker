@@ -36,7 +36,7 @@ function createConfigItem<T>(defaultValue: T, cookieKey?: string, mountedFallbac
 
 function useWritableConfig<T extends { [keys: string]: any }>(
     state: T,
-    setter: (property: string, value: any) => void
+    setters: ((property: string, value: any) => void)[] = []
 ) {
     const baseObject = useMemo(() => {
         const obj = {} as T;
@@ -57,27 +57,30 @@ function useWritableConfig<T extends { [keys: string]: any }>(
         set(target, property: string, value) {
             if (property in target) {
                 target[property as keyof T] = value;
-                setter(property, value);
+                for (const f of setters) {
+                    f(property, value);
+                }
                 return true;
             }
+
             return false;
         },
         get(target, property: string) {
             return target[property as keyof T];
         }
-    }), [baseObject, setter]);
+    }), [baseObject, setters]);
 
     return configProxy as WritableConfig<T>;
 }
 
-export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfig<T> {
+export function useSmartConfig<T extends ConfigSchema>(schema: T, setters: ((property: string, value: any) => void)[] = []): WritableConfig<T> {
     const [state, setState] = useState<ConfigValues<T>>(() =>
         Object.fromEntries(
             Object.entries(schema).map(([key, item]) => [key, item.default])
         ) as ConfigValues<T>
     );
 
-    const firstLoaded = useRef(true);
+    const [firstLoaded, setFirstLoaded] = useState(true);       // firstLoaded should be a state, not ref, because the "useEffect with dependency list" will not be triggered in written order
     const cookieRefs = useRef<Record<string, CookieRef>>({});
 
     Object.entries(schema).forEach(([key, item]) => {
@@ -90,7 +93,7 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
     });
 
     useEffect(() => {
-        if (!firstLoaded.current) {
+        if (!firstLoaded) {
             Object.entries(cookieRefs.current).forEach(([key, { setter }]) => {
                 const value = state[key as keyof T];
                 setter(typeof value === 'object' ? JSON.stringify(value) : String(value));
@@ -99,7 +102,7 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
     }, [state]);    // PITFALL this should be done before the next useEffect, prevent firstLoaded from being set false
 
     useEffect(() => {
-        if (firstLoaded.current) {
+        if (firstLoaded) {
             setState(produce((draft: any) => {
                 Object.entries(cookieRefs.current).forEach(([key, { value }]) => {
                     let process = schema[key]?.mountedFallback;
@@ -129,7 +132,7 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
                     }
                 });
             }));
-            firstLoaded.current = false;
+            setFirstLoaded(false);
         }
     }, [schema]);   // PITFALL this is setState after the first render !!! and before the resetting of label colors in feature.tsx
 
@@ -139,7 +142,9 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
         }));
     }, [setState]);
     
-    return useWritableConfig(state, setter);
+    setters.push(setter);
+
+    return useWritableConfig(state, setters);
 }
 
 // setup default config
@@ -160,14 +165,23 @@ export const globalMakerConfigSchema = {
     fullTextFile: createConfigItem('train.jsonl', 'train-data-file'),
     labelingFile: createConfigItem('sorted_labelling_sample_api.jsonl', 'labeling-file'),
     teacherFile: createConfigItem('student_teachers_pairs.jsonl', 'teacher-file'),
+    highlightFile: createConfigItem('auto_highlight.jsonl', 'highlighted-code-file'),
 
     gptApiUrl: createConfigItem('/', 'gpt-api-url'),
-    openAiApiKey: createConfigItem('', 'open-ai-api-key')
+    openAiApiKey: createConfigItem('', 'open-ai-api-key'),
+
+    useAdvancedFeatures: createConfigItem(false, 'use-advanced-features'),
+    showExternalLabeling: createConfigItem(false, 'show-external-labeling'),
+    showExternalLabelingScore: createConfigItem(true, 'show-external-labeling-score'),
+    showExternalLabelingScoreInPercentage: createConfigItem(true, 'show-external-labeling-score-in-percentage')
 } as const;
+
+export const globalMakerConfigSettersContext: ((property: string, value: any) => void)[] = [];
 
 export type MakerConfig = ConfigValues<typeof globalMakerConfigSchema>;
 
 export const simpleMantineStandardColors = ['green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'gray', 'grape', 'violet', 'indigo', 'teal'];
+
 export function convertMantineColorToRgb(colorName: string) {
     const computedRgbStyle = getComputedStyle(document.documentElement)
         .getPropertyValue(`--mantine-color-${colorName}-filled`);

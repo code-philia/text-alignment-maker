@@ -5,9 +5,9 @@ import 'highlight.js/styles/atom-one-light.min.css';
 import { CodeBlock } from './CodeBlock';
 import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
-import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
+import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult, HighlightSample } from '../data/data';
 import { matchToIndices, tryStringifyJson } from '../utils';
-import { getDefaultLabelColors, globalMakerConfigSchema, useSmartConfig, WritableConfig } from '../config';
+import { getDefaultLabelColors, globalMakerConfigSchema, globalMakerConfigSettersContext, useSmartConfig, WritableConfig } from '../config';
 import { useClickOutside } from '@mantine/hooks';
 import { LabeledCodeCommentSample, TokenAlignmentModal } from './ModelQueryModal';
 
@@ -34,7 +34,7 @@ function setLabelOfTokens(sampleIndex: number, group: number, label: number, tok
     ]);
 };
 
-function fetchResponse(dirAbsPath: string, fileName: string) {
+function readLocalFile(dirAbsPath: string, fileName: string) {
     const path = dirAbsPath.endsWith('/') ? dirAbsPath.slice(0, -1) : dirAbsPath;
     return fetch(`/mock${path}/${fileName}`)
         .then((response) => {
@@ -73,8 +73,12 @@ function readJsonLinesToList(res: Response | void): Promise<string[]> | undefine
     });
 }
 
+async function readLocalFileAsJsonLines(dirAbsPath: string, fileName: string): Promise<string[] | undefined> {
+    return readLocalFile(dirAbsPath, fileName).then(readJsonLinesToList);
+}
+
 export function Feature() {
-    const config = useSmartConfig(globalMakerConfigSchema);
+    const config = useSmartConfig(globalMakerConfigSchema, globalMakerConfigSettersContext);
 
     // Data
     const [rawCodeSamples, setRawCodeSamples] = useState<LabeledTextSample[]>([]);
@@ -86,6 +90,8 @@ export function Feature() {
     const [teachersProvider, setTeachersProvider] = useState(
         new TeachersRelationshipProvider({})
     );
+
+    const [highlightSamples, setHighlightSamples] = useState<HighlightSample[]>([]);
 
     const [labelingProvider, setLabelingProvider] = useState(
         new LabelingProvider({
@@ -239,18 +245,17 @@ export function Feature() {
 
         // TODO optimization, don't load full/all samples into memory
         setLoaderOpened(true);
-        (async () => {
 
-            const path = config.tokensDirectory.endsWith('/') ? config.tokensDirectory.slice(0, -1) : config.tokensDirectory;
-            const labelingData = await fetch(`/mock${path}/${config.labelingFile}`)
-                .then((response) => {
-                    if (!response.ok) {
+        (async () => {
+            const labelingData = readLocalFile(config.tokensDirectory, config.labelingFile)
+                .then((res) => {
+                    if (!res) {
                         throw new Error('Cannot fetch labeling file');
                     }
 
-                    return response.text();
+                    return res.text();
                 })
-                .then((data) => {
+                .then(data => {
                     labelingProvider.load(data);
                     setLabelingProvider(labelingProvider.copy());
 
@@ -263,14 +268,13 @@ export function Feature() {
 
             // FIXME too long nested, too many parenthesis
             if (labelingData !== undefined) {
-                fetchResponse(config.tokensDirectory, config.fullTextFile)
-                    .then(readJsonLinesToList)
+                readLocalFileAsJsonLines(config.tokensDirectory, config.fullTextFile)
                     .then(jsonList => {
                         if (jsonList === undefined) return;
+
                         const data = jsonList.map((line) => JSON.parse(line.trim()));
 
-                        const loadCode = fetchResponse(config.tokensDirectory, config.completeCodeTokensFile)
-                            .then(readJsonLinesToList)
+                        const loadCode = readLocalFileAsJsonLines(config.tokensDirectory, config.completeCodeTokensFile)
                             .then(jsonList => {
                                 if (!jsonList) return;
 
@@ -295,8 +299,8 @@ export function Feature() {
                                     };
                                 }));
                             });
-                        const loadComment = fetchResponse(config.tokensDirectory, config.completeCommentTokensFile)
-                            .then(readJsonLinesToList)
+
+                        const loadComment = readLocalFileAsJsonLines(config.tokensDirectory, config.completeCommentTokensFile)
                             .then(jsonList => {
                                 if (!jsonList) return;
 
@@ -321,6 +325,7 @@ export function Feature() {
                                     };
                                 }));
                             });
+
                         Promise.all([loadCode, loadComment])
                             .catch((error) => {
                                 console.error('Error while loading tokens: ', error);
@@ -329,8 +334,7 @@ export function Feature() {
                                 setLoaderOpened(false);
                             });
 
-                        fetchResponse(config.tokensDirectory, config.teacherFile)
-                            .then(readJsonLinesToList)
+                        readLocalFileAsJsonLines(config.tokensDirectory, config.teacherFile)
                             .then(jsonList => {
                                 if (!jsonList) return;
 
@@ -341,6 +345,22 @@ export function Feature() {
                                     setTeachersProvider(new TeachersRelationshipProvider({ data: teacherData }));
                                 }   // TODO add error handling, either a popup or a dialog
                             });
+                        
+                        readLocalFileAsJsonLines(config.tokensDirectory, config.highlightFile)
+                            .then(jsonList => {
+                                if (!jsonList) return;
+
+                                const highlightData = jsonList.map((line) => JSON.parse(line.trim()));
+                                if (!highlightData) return;
+
+                                setHighlightSamples(highlightData.map((d, i) => {
+                                    return {
+                                        index: d['sample_idx'],
+                                        highlightTokenIndices: d['highlight'].map((x: any) => [x['code_indices'], x['nl_indices']]),
+                                        highlightTokenScores: d['highlight'].map((x: any) => [x['code_scores'], x['nl_scores']])
+                                    };
+                                }));
+                            });
                     });
             }
         })();
@@ -348,17 +368,31 @@ export function Feature() {
     }, [labelingProvider, config.tokensDirectory]);  // FIXME is nested useCallback ugly?
 
     // Code Area
-    const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], labels: DisplayedLabel[], selected: number[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
+    const codeArea = (sample: LabeledTextSample, labelingRanges: number[][], highlightIndices: number[][], highlightScores: number[][], labels: DisplayedLabel[], selected: number[], onTokenSelectionChange?: (selectedTokenIndices: number[]) => void) => {
         return (
             <CodeBlock
                 code={sample.text ?? ''}
                 tokens={sample.tokens ?? []}
                 groupedTokenIndices={labelingRanges}
+                highlightedTokenIndices={highlightIndices}
+                highlightedTokenScores={config.showExternalLabelingScore ? highlightScores : undefined}
                 groupColors={labels.map((label) => label.color)}
                 selected={selected}
                 onTokenSelectionChange={onTokenSelectionChange}
             />
         );
+    };
+
+    const codeAreaForSample = (sample: LabeledTextSample | undefined, labelingRanges: number[][], highlightIndices: number[][], highlightScores: number[][], selected: number[], selectionCallback: typeof setSelectedCodeTokens = () => { }) => {
+        return sample ? codeArea(
+            sample,
+            labelingRanges,
+            highlightIndices,
+            highlightScores,
+            labels,
+            selected,
+            selectionCallback
+        ) : null;
     };
 
     const codeAreaForRawSampleIndex = (index: number, group: number) => {
@@ -371,18 +405,10 @@ export function Feature() {
         return codeAreaForSample(
             sample!,
             labelingProvider.getTokensOnGroup(index, group) ?? [],
+            [],
+            [],
             []
         );
-    };
-
-    const codeAreaForSample = (sample: LabeledTextSample | undefined, labelingRanges: number[][], selected: number[], selectionCallback: typeof setSelectedCodeTokens = () => { }) => {
-        return sample ? codeArea(
-            sample,
-            labelingRanges,
-            labels,
-            selected,
-            selectionCallback
-        ) : null;
     };
 
     const codeAreaForCurrentIndexForCodeOrComment = (group: number) => {
@@ -394,6 +420,16 @@ export function Feature() {
         return codeAreaForSample(
             sample!,
             labelingProvider.getTokensOnGroup(currentIndex, group) ?? [],
+            highlightSamples
+                .find((h => h.index === currentIndex))
+                ?.highlightTokenIndices
+                .map(highlightGroup => highlightGroup[group])
+            ?? [],
+            highlightSamples
+                .find((h => h.index === currentIndex))
+                ?.highlightTokenScores
+                .map(highlightGroup => highlightGroup[group])
+            ?? [],
             group === codeGroup ? selectedCodeTokens : selectedCommentTokens,
             group === codeGroup ? setSelectedCodeTokens : setSelectedCommentTokens
         );
@@ -462,19 +498,31 @@ export function Feature() {
 
     const shouldOpenModelQueryModal = sampleExists;
 
-    const displayOptions = useMemo(() => (
-        <Group>
+    const displayOptions = useMemo(() => {
+        const _CheckboxOutlineTokens =
             <Checkbox
                 checked={config.outlineTokens}
                 onChange={(event) => { config.outlineTokens = event.currentTarget.checked; }}
                 label='Outline Tokens'
-            />
+            />;
+
+        const _CheckboxShowTeacherSamples =
             <Checkbox
                 checked={config.showTeacherSamples}
                 onChange={(event) => { config.showTeacherSamples = event.currentTarget.checked; }}
                 label='Show Teacher Samples'
-            />
-            <div style={{ flex: 1 }}></div>
+            />;
+        
+        const _CheckboxShowExternalLabeling =
+            <Checkbox
+                checked={config.showExternalLabeling}
+                onChange={(event) => { config.showExternalLabeling = event.currentTarget.checked; }}
+                label='Show External Labeling'
+            />;
+
+        const _Gap = <div style={{ flex: 1 }}></div>;
+
+        const _ButtonModelQuery =
             <Button
                 className='settings-button'
                 variant='transparent'
@@ -485,7 +533,9 @@ export function Feature() {
                 Model Query
                 <Space w='6'></Space>
                 <IconRobot></IconRobot>
-            </Button>
+            </Button>;
+
+        const _ButtonMoreSettings =
             <Button
                 className='settings-button'
                 variant='transparent'
@@ -496,9 +546,14 @@ export function Feature() {
                 More Settings
                 <Space w='6'></Space>
                 <IconSettings></IconSettings>
-            </Button>
-        </Group>
-    ), [config.outlineTokens, config.showTeacherSamples, shouldOpenModelQueryModal]);
+            </Button>;
+
+        return (
+            <Group>
+                {_CheckboxOutlineTokens} {_CheckboxShowTeacherSamples} {config.useAdvancedFeatures ? _CheckboxShowExternalLabeling : null} {_Gap} {_ButtonModelQuery} {_ButtonMoreSettings}
+            </Group>
+        );
+    }, [config.outlineTokens, config.showTeacherSamples, config.useAdvancedFeatures, config.showExternalLabeling, shouldOpenModelQueryModal]);
 
     const [saveModalOpened, setSaveModalOpened] = useState(false);
 
@@ -530,92 +585,106 @@ export function Feature() {
         </Modal>
     );
     const navigationRow = useMemo(() => {
-        return (currentIndex === undefined) ? null : (
-            <>
-                <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
-                    <Grid.Col span={2.8}>
-                        <Group gap='xs' align='center'>
-                            <Popover
-                                position='bottom'
-                                withArrow shadow='md'
-                                trapFocus
-                            >
-                                <Popover.Target>
-                                    <Button>
-                                        Go to index
-                                    </Button>
-                                </Popover.Target>
-                                <Popover.Dropdown>
-                                    <NumberInput
-                                        ref={goToInput}
-                                        value={goToIndex}
-                                        min={0}
-                                        onChange={(value) => setGoToIndex(value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
-                                                handleGoTo();
-                                            }
-                                        }}
-                                        error={goToIndexError}
-                                        w='90'
-                                        rightSection={
-                                            <Kbd w='19' h='22' p='0'>
-                                                <Center p='0'>
-                                                    ↵
-                                                </Center>
-                                            </Kbd>
-                                        }
-                                        rightSectionWidth={34}
-                                        onFocus={() => { goToInput.current?.select(); }}
-                                    >
-                                    </NumberInput>
-                                </Popover.Dropdown>
-                            </Popover>
-                        </Group>
-                    </Grid.Col>
-                    <Grid.Col span={6.4}>
-                        <Center>
-                            <NumberNavigation
-                                value={currentLabelingResultIndex}
-                                total={labelingProvider.getSampleIndices().length}
-                                onChangeValue={setCurrentSampleIndex}
-                                tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
-                            />
-                        </Center>
-                    </Grid.Col>
-                    <Grid.Col span={2.8}>
-                        <Group justify='flex-end'>
-                            <Button
-                                onClick={() => labelingProvider.save()}     // TODO don't use labelingProvider.onSave(), it is causing cyclic calling
-                            >
-                                Save Labeling
+        if (currentIndex === undefined) {
+            return null;
+        }
+
+        const _ColGoToIndexButton =
+            <Grid.Col span={2.8}>
+                <Group gap='xs' align='center'>
+                    <Popover
+                        position='bottom'
+                        withArrow shadow='md'
+                        trapFocus
+                    >
+                        <Popover.Target>
+                            <Button>
+                                Go to index
                             </Button>
-                        </Group>
-                    </Grid.Col>
-                </Grid>
-            </>
+                        </Popover.Target>
+                        <Popover.Dropdown>
+                            <NumberInput
+                                ref={goToInput}
+                                value={goToIndex}
+                                min={0}
+                                onChange={(value) => setGoToIndex(value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !(e.ctrlKey || e.shiftKey)) {
+                                        handleGoTo();
+                                    }
+                                }}
+                                error={goToIndexError}
+                                w='90'
+                                rightSection={
+                                    <Kbd w='19' h='22' p='0'>
+                                        <Center p='0'>
+                                            ↵
+                                        </Center>
+                                    </Kbd>
+                                }
+                                rightSectionWidth={34}
+                                onFocus={() => { goToInput.current?.select(); }}
+                            >
+                            </NumberInput>
+                        </Popover.Dropdown>
+                    </Popover>
+                </Group>
+            </Grid.Col>;
+        
+        const _ColNumberNavigation =
+            <Grid.Col span={6.4}>
+                <Center>
+                    <NumberNavigation
+                        value={currentLabelingResultIndex}
+                        total={labelingProvider.getSampleIndices().length}
+                        onChangeValue={setCurrentSampleIndex}
+                        tags={labelingProvider.getSampleIndices().map((i) => i.toString())}
+                    />
+                </Center>
+            </Grid.Col>;
+        
+        const _ColSaveLabelingButton =
+            <Grid.Col span={2.8}>
+                <Group justify='flex-end'>
+                    <Button
+                        onClick={() => labelingProvider.save()}     // TODO don't use labelingProvider.onSave(), it is causing cyclic calling
+                    >
+                        Save Labeling
+                    </Button>
+                </Group>
+            </Grid.Col>;
+
+        return (
+            <Grid align='center' style={{ gridTemplateColumns: 'min-content 1fr min-content' }}>
+                {_ColGoToIndexButton} {_ColNumberNavigation} {_ColSaveLabelingButton}
+            </Grid>
         );
     }, [saveModalOpened, currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
 
     const operationRow = useMemo(() => {
+        const _ColClearAllLabelsButton =
+            <Button
+                onClick={() => {
+                    labelingProvider.clearAllLabelsForSample(currentIndex);
+                    setLabelingProvider(labelingProvider.copy());
+                }}
+            >
+                Clear All Labels
+            </Button>;
+        
+        const _ColResetCurrentSampleButton =
+            <Button
+                onClick={() => {
+                    labelingProvider.resetSample(currentIndex);
+                    setLabelingProvider(labelingProvider.copy());
+                }}
+            >
+                Reset Current Sample
+            </Button>;
+
         return (
             <Group justify='center'>
-                <Button
-                    onClick={() => {
-                        labelingProvider.clearAllLabelsForSample(currentIndex);
-                        setLabelingProvider(labelingProvider.copy());
-                    }}
-                >
-                    Clear All Labels
-                </Button>
-                <Button
-                    onClick={() => {
-                        labelingProvider.resetSample(currentIndex);
-                        setLabelingProvider(labelingProvider.copy());
-                    }}
-                >
-                    Reset Current Sample
-                </Button>
+                {_ColClearAllLabelsButton} {_ColResetCurrentSampleButton}
             </Group>
         );
     }, [labelingProvider, currentIndex]);
@@ -777,7 +846,6 @@ export function Feature() {
         <MoreSettingsModal
             opened={moreSettingsModalOpened}
             onClose={() => setMoreSettingsModalOpened(false)}
-            config={config}
             activeColorIndex={activeColorIndex}
             setActiveColorIndex={setActiveColorIndex}
             resetColorPopoverOpened={resetColorPopoverOpened}
@@ -878,7 +946,6 @@ export function Feature() {
 function MoreSettingsModal({
     opened,
     onClose,
-    config,
     activeColorIndex,
     setActiveColorIndex,
     resetColorPopoverOpened,
@@ -888,7 +955,6 @@ function MoreSettingsModal({
 }: {
     opened: boolean;
     onClose: () => void;
-    config: WritableConfig<typeof globalMakerConfigSchema>;
     activeColorIndex: number | null;
     setActiveColorIndex: (index: number | null) => void;
     resetColorPopoverOpened: boolean;
@@ -896,6 +962,198 @@ function MoreSettingsModal({
     resetLabelColors: () => void;
     resetColorPopoverRef: React.RefObject<HTMLDivElement>;
 }) {
+    const config = useSmartConfig(globalMakerConfigSchema, globalMakerConfigSettersContext);
+    
+    const _GroupStyle =
+        <Container p={0} w='100%'>
+            <Title order={4} p='0 0 0.2em 0'>Style</Title>
+            <Group gap={6} w='fit-content'>
+                <Text size='sm' fw={600}>Label Colors</Text>
+                <Popover
+                    opened={resetColorPopoverOpened}
+                    position='right'
+                    withArrow
+                    shadow='xs'
+                    offset={{
+                        mainAxis: 12,
+                        crossAxis: -4
+                    }}
+                >
+                    <Popover.Target>
+                        <Button
+                            w={18}
+                            h={18}
+                            color='black'
+                            p='0'
+                            onClick={() => setResetColorPopoverOpened(true)}
+                        >
+                            <IconReload style={{ width: rem(12), height: rem(12) }} />
+                        </Button>
+                    </Popover.Target>
+                    <Popover.Dropdown ref={resetColorPopoverRef} p='6px 6px'>
+                        <Group
+                            p={0}
+                            gap='xs'
+                        >
+                            <Text size='sm' fw={600}>Reset all colors?</Text>
+                            <Button
+                                size='compact-xs'
+                                color='red'
+                                onClick={() => {
+                                    resetLabelColors();
+                                    setResetColorPopoverOpened(false);
+                                }}
+                            >
+                                Confirm
+                            </Button>
+                        </Group>
+                    </Popover.Dropdown>
+                </Popover>
+            </Group>
+            <Space h='sm'></Space>
+            <Group gap="xs" w='fit-content' justify='flex-start'>
+                {config.labelColors.map((color, index) => (
+                    <Popover
+                        key={index}
+                        position="bottom"
+                        shadow='xs'
+                        withArrow
+                        closeOnClickOutside
+                        clickOutsideEvents={['mouseup', 'touchend']}
+                        onOpen={() => {
+                            index === activeColorIndex ? setActiveColorIndex(null) : setActiveColorIndex(index);
+                        }}
+                        onClose={() => {
+                            setActiveColorIndex(null);
+                        }}
+                    >
+                        <Popover.Target>
+                            <ActionIcon
+                                radius="sm"
+                                variant="filled"
+                                className='custom-color-watch'
+                                style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    backgroundColor: color,
+                                    ...(index === activeColorIndex ? { border: '3px solid black' } : { outlineOffset: '3px' })
+                                }}
+                            >
+                                {index + 1}
+                            </ActionIcon>
+                        </Popover.Target>
+                        <Popover.Dropdown>
+                            <ColorPicker
+                                value={config.labelColors[index]}
+                                onChange={(newColor) => {
+                                    const newColors = [...config.labelColors];
+                                    if (index !== null) {
+                                        newColors[index] = newColor;
+                                    }
+                                    config.labelColors = newColors;
+                                }}
+                                format="rgba"
+                            />
+                        </Popover.Dropdown>
+                    </Popover>))}
+            </Group>
+        </Container>;
+    
+    const _GroupFileNames =
+        <Container p={0} w='100%'>
+            <Title order={4} p='0.2em 0'>File Names</Title>
+            <TextInput
+                label="Full Text File"
+                placeholder="file that contains full text of code and comments"
+                value={config.fullTextFile}
+                onChange={(e) => { config.fullTextFile = e.target.value; }}
+                onFocus={(e) => { e.target.select(); }}
+            />
+            <Group p={0} grow justify='space-between'>
+                <TextInput
+                    label="Code Tokens File"
+                    placeholder="file with code tokens"
+                    value={config.completeCodeTokensFile}
+                    onChange={(e) => { config.completeCodeTokensFile = e.target.value; }}
+                    onFocus={(e) => { e.target.select(); }}
+                />
+                <TextInput
+                    label="Comment Tokens File"
+                    placeholder="file with comment tokens"
+                    value={config.completeCommentTokensFile}
+                    onChange={(e) => { config.completeCommentTokensFile = e.target.value; }}
+                    onFocus={(e) => { e.target.select(); }}
+                />
+            </Group>
+            <Group p={0} grow justify='space-between'>
+                <TextInput
+                    label="Labeling File"
+                    placeholder="file with concrete labeling"
+                    value={config.labelingFile}
+                    onChange={(e) => { config.labelingFile = e.target.value; }}
+                    onFocus={(e) => { e.target.select(); }}
+                />
+                <TextInput
+                    label="Teachers File"
+                    placeholder="file with teachers information"
+                    value={config.teacherFile}
+                    onChange={(e) => { config.teacherFile = e.target.value; }}
+                    onFocus={(e) => { e.target.select(); }}
+                />
+            </Group>
+            <TextInput
+                label="External Highlight File"
+                placeholder="file with external highlighting information"
+                value={config.highlightFile}
+                onChange={(e) => { config.highlightFile = e.target.value; }}
+                onFocus={(e) => { e.target.select(); }}
+            />
+        </Container>;
+    
+    const _GroupOpenAISettings =
+        <Container p={0} w='100%'>
+            <Title order={4} p='0.2em 0'>OpenAI Settings</Title>
+            <TextInput
+                label="Model API URL"
+                placeholder="address of OpenAI model API"
+                value={config.gptApiUrl}
+                onChange={(e) => { config.gptApiUrl = e.target.value; }}
+                onFocus={(e) => { e.target.select(); }}
+            />
+            <TextInput
+                label="OpenAI API Key"
+                placeholder="a valid API key"
+                value={config.openAiApiKey}
+                onChange={(e) => { config.openAiApiKey = e.target.value; }}
+                onFocus={(e) => { e.target.select(); }}
+            />
+        </Container>;
+    
+    const _GroupAdvancedSettings =
+        <Container p={0} w='100%'>
+            <Title order={4} p='0.2em 0'>Advanced Settings</Title>
+            <Checkbox
+                p='3px 0'
+                checked={config.useAdvancedFeatures}
+                onChange={(event) => { config.useAdvancedFeatures = event.currentTarget.checked; }}
+                label='Enable Advanced Features'
+            />
+            <Checkbox
+                p='3px 0'
+                disabled={!config.useAdvancedFeatures}
+                checked={config.showExternalLabelingScore}
+                onChange={(event) => { config.showExternalLabelingScore = event.currentTarget.checked; }}
+                label='External Labeling: Show Score'
+            />
+            <Checkbox
+                p='3px 0'
+                disabled={!config.useAdvancedFeatures}
+                checked={config.showExternalLabelingScoreInPercentage}
+                onChange={(event) => { config.showExternalLabelingScoreInPercentage = event.currentTarget.checked; }}
+                label='External Labeling: Show Score In Percentage'
+            />
+        </Container>;
+    
     return (
         <Modal
             opened={opened}
@@ -907,158 +1165,10 @@ function MoreSettingsModal({
             size='lg'
         >
             <Stack p='0 0 1em'>
-                <Container p={0} w='100%'>
-                    <Title order={4} p='0 0 0.2em 0'>Style</Title>
-                    <Group gap={6} w='fit-content'>
-                        <Text size='sm' fw={600}>Label Colors</Text>
-                        <Popover
-                            opened={resetColorPopoverOpened}
-                            position='right'
-                            withArrow
-                            shadow='xs'
-                            offset={{
-                                mainAxis: 12,
-                                crossAxis: -4
-                            }}
-                        >
-                            <Popover.Target>
-                                <Button
-                                    w={18}
-                                    h={18}
-                                    color='black'
-                                    p='0'
-                                    onClick={() => setResetColorPopoverOpened(true)}
-                                >
-                                    <IconReload style={{ width: rem(12), height: rem(12) }} />
-                                </Button>
-                            </Popover.Target>
-                            <Popover.Dropdown ref={resetColorPopoverRef} p='6px 6px'>
-                                <Group
-                                    p={0}
-                                    gap='xs'
-                                >
-                                    <Text size='sm' fw={600}>Reset all colors?</Text>
-                                    <Button
-                                        size='compact-xs'
-                                        color='red'
-                                        onClick={() => {
-                                            resetLabelColors();
-                                            setResetColorPopoverOpened(false);
-                                        }}
-                                    >
-                                        Confirm
-                                    </Button>
-                                </Group>
-                            </Popover.Dropdown>
-                        </Popover>
-                    </Group>
-                    <Space h='sm'></Space>
-                    <Group gap="xs" w='fit-content' justify='flex-start'>
-                        {config.labelColors.map((color, index) => (
-                            <Popover
-                                key={index}
-                                position="bottom"
-                                shadow='xs'
-                                withArrow
-                                closeOnClickOutside
-                                clickOutsideEvents={['mouseup', 'touchend']}
-                                onOpen={() => {
-                                    index === activeColorIndex ? setActiveColorIndex(null) : setActiveColorIndex(index);
-                                }}
-                                onClose={() => {
-                                    setActiveColorIndex(null);
-                                }}
-                            >
-                                <Popover.Target>
-                                    <ActionIcon
-                                        radius="sm"
-                                        variant="filled"
-                                        className='custom-color-watch'
-                                        style={{
-                                            width: '30px',
-                                            height: '30px',
-                                            backgroundColor: color,
-                                            ...(index === activeColorIndex ? { border: '3px solid black' } : { outlineOffset: '3px' })
-                                        }}
-                                    >
-                                        {index + 1}
-                                    </ActionIcon>
-                                </Popover.Target>
-                                <Popover.Dropdown>
-                                    <ColorPicker
-                                        value={config.labelColors[index]}
-                                        onChange={(newColor) => {
-                                            const newColors = [...config.labelColors];
-                                            if (index !== null) {
-                                                newColors[index] = newColor;
-                                            }
-                                            config.labelColors = newColors;
-                                        }}
-                                        format="rgba"
-                                    />
-                                </Popover.Dropdown>
-                            </Popover>))}
-                    </Group>
-                </Container>
-                <Container p={0} w='100%'>
-                    <Title order={4} p='0.2em 0'>File Names</Title>
-                    <TextInput
-                        label="Full Text File"
-                        placeholder="file that contains full text of code and comments"
-                        value={config.fullTextFile}
-                        onChange={(e) => { config.fullTextFile = e.target.value; }}
-                        onFocus={(e) => { e.target.select(); }}
-                    />
-                    <Group p={0} grow justify='space-between'>
-                        <TextInput
-                            label="Code Tokens File"
-                            placeholder="file with code tokens"
-                            value={config.completeCodeTokensFile}
-                            onChange={(e) => { config.completeCodeTokensFile = e.target.value; }}
-                            onFocus={(e) => { e.target.select(); }}
-                        />
-                        <TextInput
-                            label="Comment Tokens File"
-                            placeholder="file with comment tokens"
-                            value={config.completeCommentTokensFile}
-                            onChange={(e) => { config.completeCommentTokensFile = e.target.value; }}
-                            onFocus={(e) => { e.target.select(); }}
-                        />
-                    </Group>
-                    <Group p={0} grow justify='space-between'>
-                        <TextInput
-                            label="Labeling File"
-                            placeholder="file with concrete labeling"
-                            value={config.labelingFile}
-                            onChange={(e) => { config.labelingFile = e.target.value; }}
-                            onFocus={(e) => { e.target.select(); }}
-                        />
-                        <TextInput
-                            label="Teachers File"
-                            placeholder="file with teachers information"
-                            value={config.teacherFile}
-                            onChange={(e) => { config.teacherFile = e.target.value; }}
-                            onFocus={(e) => { e.target.select(); }}
-                        />
-                    </Group>
-                </Container>
-                <Container p={0} w='100%'>
-                    <Title order={4} p='0.2em 0'>OpenAI Settings</Title>
-                    <TextInput
-                        label="Model API URL"
-                        placeholder="address of OpenAI model API"
-                        value={config.gptApiUrl}
-                        onChange={(e) => { config.gptApiUrl = e.target.value; }}
-                        onFocus={(e) => { e.target.select(); }}
-                    />
-                    <TextInput
-                        label="OpenAI API Key"
-                        placeholder="a valid API key"
-                        value={config.openAiApiKey}
-                        onChange={(e) => { config.openAiApiKey = e.target.value; }}
-                        onFocus={(e) => { e.target.select(); }}
-                    />
-                </Container>
+                {_GroupStyle}
+                {_GroupFileNames}
+                {_GroupOpenAISettings}
+                {_GroupAdvancedSettings}
             </Stack >
         </Modal >
     );

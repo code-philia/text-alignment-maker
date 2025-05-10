@@ -1,14 +1,15 @@
 import { ScrollArea } from '@mantine/core';
 import { useRef, useEffect } from 'react';
 import { removeDocstrings, isSpecialToken, findCommentEnd } from '../utils';
-import { simpleMantineStandardColors } from '../config';
+import { globalMakerConfigSchema, globalMakerConfigSettersContext, simpleMantineStandardColors, useSmartConfig } from '../config';
 
 // code block
 function generateHighlightedCode(
     codeElement: HTMLElement,
     originalText: string,
     tokens: string[],
-    groupedTokenIndices: number[][]
+    groupedTokenIndices: number[][],
+    highlightedTokenIndices: number[][]
 ): HTMLElement {
     // FIXME this should add an option, because this simply removes docstring. Some user may choose not to remove
     originalText = removeDocstrings(originalText);
@@ -19,6 +20,13 @@ function generateHighlightedCode(
     groupedTokenIndices.forEach((group, groupIndex) => {
         group.forEach((index) => {
             tokenToLabel.set(index, groupIndex);
+        });
+    });
+
+    const tokenToHighlight: Map<number, number> = new Map();
+    highlightedTokenIndices.forEach((group, groupIndex) => {
+        group.forEach((index) => {
+            tokenToHighlight.set(index, groupIndex);
         });
     });
 
@@ -37,10 +45,15 @@ function generateHighlightedCode(
             const span = document.createElement("span");
 
             span.classList.add(`token-${tokenIndex}`);
-            
+
             const labelNumber = tokenToLabel.get(tokenIndex);
             if (labelNumber !== undefined) {
                 span.classList.add(`label-${labelNumber}`);
+            }
+
+            const highlightNumber = tokenToHighlight.get(tokenIndex);
+            if (highlightNumber !== undefined) {
+                span.classList.add(`highlight-${highlightNumber}`);
             }
 
             span.textContent = tokenInText;
@@ -131,6 +144,8 @@ function expandSelectedRanges(selection: Selection, targetSpans: HTMLElement[]) 
 }
 const tokenIndexPrefix = 'token-';
 const labelPrefix = 'label-';
+const highlightPrefix = 'highlight-';
+
 function getFollowingNumber(cls: string, prefix: string) {
     if (cls.startsWith(prefix)) {
         const labelNumber = parseInt(cls.slice(prefix.length));
@@ -234,11 +249,11 @@ function processSelectionEvents(code: HTMLElement, onTokenSelectionChange?: (sel
 //     if (colorLiteral in simpleMantineStandardColors) {
 //         return `var(--mantine-color-${colorLiteral}-filled)`;
 //     }
-    
+
 //     return colorLiteral;
 // };
 
-function processTokens(code: HTMLElement, groupColors: string[]) {
+function processTokens(code: HTMLElement, groupColors: string[], highlightColors: string[]) {
     const targetSpans: HTMLElement[] = [];
 
     code.childNodes.forEach((node) => {
@@ -252,35 +267,87 @@ function processTokens(code: HTMLElement, groupColors: string[]) {
         if (labelNumber !== undefined) {
             span.style.color = groupColors[labelNumber];
         }
+
+        const highlightNumber = getNumberOfElement(span, highlightPrefix);
+        if (highlightNumber !== undefined && highlightColors[highlightNumber]) {
+            span.style.outline = `1px solid ${highlightColors[highlightNumber]}`;
+        }
     });
 }
 type CodeBlockProps = {
     code: string;
     tokens: string[];
     groupedTokenIndices: number[][];
+    highlightedTokenIndices?: number[][];
+    highlightedTokenScores?: number[][];
     groupColors: string[];
     selected: number[];
     onTokenSelectionChange?: (selectedTokenIndices: number[]) => void;
 };
-export function CodeBlock({ code, tokens, groupedTokenIndices, groupColors, selected, onTokenSelectionChange }: CodeBlockProps) {
+
+export function CodeBlock({ code, tokens, groupedTokenIndices, highlightedTokenIndices, highlightedTokenScores, groupColors, selected, onTokenSelectionChange }: CodeBlockProps) {
+    const config = useSmartConfig(globalMakerConfigSchema, globalMakerConfigSettersContext);;
+
     const codeRef = useRef<HTMLPreElement>(null);
 
     useEffect(() => {
         if (codeRef.current) {
-            generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices);
-            processTokens(codeRef.current, groupColors);
+            generateHighlightedCode(codeRef.current, code, tokens, groupedTokenIndices, config.showExternalLabeling ? (highlightedTokenIndices ?? []) : []);
+            processTokens(codeRef.current, groupColors, config.showExternalLabeling && highlightedTokenIndices ? new Array(highlightedTokenIndices.length).fill('#0000ff') : []);
             restoreSelection(codeRef.current, selected);    // FIXME this is not restoring actual selection. either don't rerender or manually set actual selection range
             return processSelectionEvents(codeRef.current, onTokenSelectionChange);
         }
-    }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens]);
+    }, [code, groupColors, groupedTokenIndices, onTokenSelectionChange, tokens, config.showExternalLabeling]);
 
     return (
         <pre className='target-code-pre'>
-            <ScrollArea h={300} p='1em'>
-                <code ref={codeRef}>
-                    {code}
-                </code>
+            <ScrollArea h={300}>
+                <div style={{ padding: '1em' }}>
+                    <code ref={codeRef}>
+                        {code}
+                    </code>
+                </div>
+                {config.showExternalLabeling && config.showExternalLabelingScore && highlightedTokenIndices && highlightedTokenScores && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
+                        {Array.from(codeRef.current?.querySelectorAll('span') ?? []).map((span, index) => {
+                            const targetCodePre = span.closest('.target-code-pre');
+                            const rect = span.getBoundingClientRect();
+                            const preRect = targetCodePre?.getBoundingClientRect();
+                            if (!preRect) return null;
+                            const relativeRect = {
+                                left: rect.left - preRect.left,
+                                top: rect.top - preRect.top
+                            };
+                            const tokenIndex = getFollowingNumber(span.classList[0], tokenIndexPrefix);
+                            if (tokenIndex === undefined) return null;
+
+                            let score: number | undefined;
+                            highlightedTokenScores.forEach((scores, groupIndex) => {
+                                const index = highlightedTokenIndices[groupIndex].indexOf(tokenIndex);
+                                if (index !== -1) {
+                                    score = scores[index];
+                                }
+                            });
+
+                            if (score === undefined) return null;
+
+                            return (
+                                <div key={index} className='labeling-score' style={{
+                                    position: 'absolute',
+                                    left: `${relativeRect.left}px`,
+                                    top: `${relativeRect.top - 16}px`,
+                                    fontSize: '8px',
+                                    width: 'max-content',
+                                    color: '#0000ff'
+                                }}>
+                                    {config.showExternalLabelingScoreInPercentage ? (score * 100).toFixed(2) : score.toFixed(2)}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </ScrollArea>
+
         </pre>
     );
 }

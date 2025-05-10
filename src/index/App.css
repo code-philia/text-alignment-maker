@@ -20,7 +20,7 @@ code {
   text-wrap: wrap;
   word-break: break-all;
 
-  line-height: 1.1em;
+  line-height: 1.3em;
   
   flex: 1;
   min-width: 0;
@@ -93,5 +93,19 @@ code {
 }
 
 .mantine-Modal-content {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.mantine-Modal-body {
+  overflow: auto;
+}
+
+.target-code-pre .mantine-ScrollArea-viewport {
+  position: relative;
+}
+
+.labeling-score {
+  font-family: 'Cascadia Code', 'Courier New', Courier, monospace;
 }
