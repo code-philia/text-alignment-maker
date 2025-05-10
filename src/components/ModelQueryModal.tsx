@@ -116,7 +116,7 @@ export function TokenAlignmentModal({
             const studentTokens = {
                 codeTokens: uniqueStudentCodeTokens,
                 commentTokens: uniqueStudentCommentTokens
-            }
+            };
             
             const refSamples = getRefSamples(studentIndex);
 
@@ -134,7 +134,7 @@ export function TokenAlignmentModal({
                     teacherTokens.codeTokens,
                     teacherTokens.commentTokens,
                     refSamples[0].labeling
-                )
+                );
 
                 if (refSamples[0].labeling.length === 0) {
                     notifications.show({
@@ -199,7 +199,7 @@ export function TokenAlignmentModal({
 
         const initTeacherIndex = teacherIndices.length > 0 ? teacherIndices[0] : null;
         setTeacherIndex(initTeacherIndex ? parseInt(initTeacherIndex) : null);
-    }, [getTeacherIndices])
+    }, [getTeacherIndices]);
 
     return (
         <Modal

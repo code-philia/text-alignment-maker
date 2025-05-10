@@ -224,7 +224,7 @@ export function toAlignmentWithUniqueToken(uniqueCodeTokens: string[], uniqueCom
         return {
             commentToken: commentIndices.map((i) => uniqueCommentTokens[i]),
             codeToken: codeIndices.map((i) => uniqueCodeTokens[i])
-        }
+        };
     });
     return result;
 }
@@ -240,8 +240,8 @@ export function toAlignmentWithIndices(alignments: Alignment[], mapsToOriginalIn
         return [
             commentTokens.map((token) => commentMap.get(token)).filter(i => i !== undefined),
             codeTokens.map((token) => codeMap.get(token)).filter(i => i !== undefined)
-        ]
-    })
+        ];
+    });
 
     return result;
 }

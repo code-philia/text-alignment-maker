@@ -16,7 +16,7 @@ type ConfigValues<T extends ConfigSchema> = {
     [K in keyof T]: T[K]['default'];
 };
 
-type WritableConfig<T extends ConfigSchema> = {
+export type WritableConfig<T extends ConfigSchema> = {
     -readonly [K in keyof ConfigValues<T>]: ConfigValues<T>[K];
 };
 
@@ -82,6 +82,8 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
 
     Object.entries(schema).forEach(([key, item]) => {
         if (item.cookieKey) {
+            // assume the number of keys in T is constant
+            /* eslint-disable-next-line react-hooks/rules-of-hooks */
             const [value, setter, remover] = useCookie(item.cookieKey!);
             cookieRefs.current[key] = { value, setter, remover };
         }
@@ -142,17 +144,6 @@ export function useSmartConfig<T extends ConfigSchema>(schema: T): WritableConfi
 
 // setup default config
 
-export const simpleMantineStandardColors = ['green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'gray', 'grape', 'violet', 'indigo', 'teal'];
-export function convertMantineColorToRgb(colorName: string) {
-    const computedRgbStyle = getComputedStyle(document.documentElement)
-        .getPropertyValue(`--mantine-color-${colorName}-filled`);
-    return computedRgbStyle !== '' ? computedRgbStyle : '#ffffff';
-}
-
-export function getDefaultLabelColors() {
-    return simpleMantineStandardColors.map(convertMantineColorToRgb);
-}
-
 export const globalMakerConfigSchema = {
     tokensDirectory: createConfigItem('/demo', 'tokens-directory'),
     outlineTokens: createConfigItem(true, 'outline-tokens'),
@@ -175,3 +166,14 @@ export const globalMakerConfigSchema = {
 } as const;
 
 export type MakerConfig = ConfigValues<typeof globalMakerConfigSchema>;
+
+export const simpleMantineStandardColors = ['green', 'red', 'yellow', 'orange', 'cyan', 'lime', 'pink', 'gray', 'grape', 'violet', 'indigo', 'teal'];
+export function convertMantineColorToRgb(colorName: string) {
+    const computedRgbStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue(`--mantine-color-${colorName}-filled`);
+    return computedRgbStyle !== '' ? computedRgbStyle : '#ffffff';
+}
+
+export function getDefaultLabelColors() {
+    return simpleMantineStandardColors.map(convertMantineColorToRgb);
+}

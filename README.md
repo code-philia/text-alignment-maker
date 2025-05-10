@@ -31,8 +31,8 @@ pnpm run dev
 
 ## Specification
 
-> [!NOTE] 
-> Download the ZIP archive of a sample data folder [here](https://drive.google.com/file/d/1KXnlEHcB2hOgspZu-SxuAdzUszXwVFg8/view?usp=sharing) for reference.
+> [!NOTE]
+> Use the `sample` folder for test. For reference to larger dataset, download the ZIP archive of a sample data folder [here](https://drive.google.com/file/d/1KXnlEHcB2hOgspZu-SxuAdzUszXwVFg8/view?usp=sharing).
 
 **Limited to string size when executing JavaScript in the browser, only `jsonl` files are accepted.**
 

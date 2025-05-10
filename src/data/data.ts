@@ -30,7 +30,7 @@ export class LabelingProvider {
     // suppose the first group is comment and the second group is code
     constructor({ copied, content, onSave }: LabelingProviderOptions) {
         if (copied) {
-            this.sampleIndices = copied.sampleIndices
+            this.sampleIndices = copied.sampleIndices;
             this.sampleLabelGroupTokens = copied.sampleLabelGroupTokens;
             this.originalSampleLabelGroupTokens = copied.originalSampleLabelGroupTokens;
             this.onSave = copied.onSave;

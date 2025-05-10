@@ -7,7 +7,7 @@ import { NumberNavigation } from './NumberNavigation';
 import { AlignmentLabels } from './AlignmentLabels';
 import { LabelingProvider, LabeledTextSample, codeGroup, commentGroup, TeachersRelationshipProvider, isTeachersResult } from '../data/data';
 import { matchToIndices, tryStringifyJson } from '../utils';
-import { getDefaultLabelColors, globalMakerConfigSchema, useSmartConfig } from '../config';
+import { getDefaultLabelColors, globalMakerConfigSchema, useSmartConfig, WritableConfig } from '../config';
 import { useClickOutside } from '@mantine/hooks';
 import { LabeledCodeCommentSample, TokenAlignmentModal } from './ModelQueryModal';
 
@@ -49,7 +49,7 @@ function fetchResponse(dirAbsPath: string, fileName: string) {
         });
 }
 
-function readJsonLinesToList(res: Response | void): Promise<string[]> | undefined{
+function readJsonLinesToList(res: Response | void): Promise<string[]> | undefined {
     if (!res || (!res.body)) return;
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -82,9 +82,9 @@ export function Feature() {
 
     const [codeSamples, setCodeSamples] = useState<LabeledTextSample[]>([]);
     const [commentSamples, setCommentSamples] = useState<LabeledTextSample[]>([]);
-    
+
     const [teachersProvider, setTeachersProvider] = useState(
-        new TeachersRelationshipProvider({ })
+        new TeachersRelationshipProvider({})
     );
 
     const [labelingProvider, setLabelingProvider] = useState(
@@ -149,7 +149,7 @@ export function Feature() {
     const [selectedCodeTokens, setSelectedCodeTokens] = useState<number[]>([]);
     const [selectedCommentTokens, setSelectedCommentTokens] = useState<number[]>([]);
 
-    const generateColorForLabels = useCallback((colors: string[],n: number) => {
+    const generateColorForLabels = useCallback((colors: string[], n: number) => {
         const l = colors.length;
 
         const getColor = l <= 0
@@ -220,7 +220,7 @@ export function Feature() {
         setRawCommentSamples([]);
         setCodeSamples([]);
         setCommentSamples([]);
-        
+
         setTeachersProvider(new TeachersRelationshipProvider({}));
         setLabelingProvider(new LabelingProvider({
             content: '',
@@ -328,7 +328,7 @@ export function Feature() {
                             .then(() => {
                                 setLoaderOpened(false);
                             });
-                        
+
                         fetchResponse(config.tokensDirectory, config.teacherFile)
                             .then(readJsonLinesToList)
                             .then(jsonList => {
@@ -412,8 +412,8 @@ export function Feature() {
     const fileInfoBadge = (
         <HoverCard width={300} position="right" shadow="md" offset={{ crossAxis: 80 }}>
             <HoverCard.Target>
-                <Button variant='transparent' size='compact-xs' style={{ padding: '3px', cursor: 'unset'}}>
-                    <IconInfoCircle style={{ width: rem(12), height: rem(12) }}/>
+                <Button variant='transparent' size='compact-xs' style={{ padding: '3px', cursor: 'unset' }}>
+                    <IconInfoCircle style={{ width: rem(12), height: rem(12) }} />
                 </Button>
             </HoverCard.Target>
             <HoverCard.Dropdown style={{ padding: '1.5em' }}>
@@ -422,16 +422,16 @@ export function Feature() {
                     <Space h='xs' />
                     <List size='xs' spacing='5'>
                         <List.Item>
-                            A code tokens file:<br/><b>{config.completeCodeTokensFile}</b>
+                            A code tokens file:<br /><b>{config.completeCodeTokensFile}</b>
                         </List.Item>
                         <List.Item>
-                            A comment tokens file:<br/><b>{config.completeCommentTokensFile}</b>
+                            A comment tokens file:<br /><b>{config.completeCommentTokensFile}</b>
                         </List.Item>
                         <List.Item>
-                            A data file that contains full text of code and docstring:<br/><b>{config.fullTextFile}</b>
+                            A data file that contains full text of code and docstring:<br /><b>{config.fullTextFile}</b>
                         </List.Item>
                         <List.Item>
-                            A labeling result file, which as array of labeling applied to a list of samples, will be shown below:<br/><b>{config.labelingFile}</b>
+                            A labeling result file, which as array of labeling applied to a list of samples, will be shown below:<br /><b>{config.labelingFile}</b>
                         </List.Item>
                     </List>
                 </Container>
@@ -529,7 +529,6 @@ export function Feature() {
             </Container>
         </Modal>
     );
-
     const navigationRow = useMemo(() => {
         return (currentIndex === undefined) ? null : (
             <>
@@ -595,7 +594,7 @@ export function Feature() {
                     </Grid.Col>
                 </Grid>
             </>
-        )
+        );
     }, [saveModalOpened, currentIndex, currentLabelingResultIndex, goToIndex, goToIndexError, labelingProvider, codeSamples, commentSamples, rawCodeSamples, rawCommentSamples]);  // TODO put codeSamples, commentSamples, rawCodeSamples, rawCommentSamples into one object to update
 
     const operationRow = useMemo(() => {
@@ -618,7 +617,7 @@ export function Feature() {
                     Reset Current Sample
                 </Button>
             </Group>
-        )
+        );
     }, [labelingProvider, currentIndex]);
 
     // TODO add transition for this
@@ -628,47 +627,47 @@ export function Feature() {
             <Center h='300'>
                 <Stack align='center' gap='xs'>
                     <Text c='blue'>Loading Tokens...</Text>
-                    <Loader size='lg' color='blue' type='dots'/>
+                    <Loader size='lg' color='blue' type='dots' />
                 </Stack>
             </Center>
             :
-        currentIndex
-            ?
-            <Container p='0'>
-                <Center>
-                    <AlignmentLabels
-                        labels={labels}     // TODO show number of tokens under labels, and highlight and mention those has no token
-                        setLabels={setLabelsWithDefaultColor}
-                        onClickLabel={clickLabelCallback}
-                    />
-                </Center>
-                <Container p='0 1em'>
-                    <Title order={4} style={{ padding: '0.3em 0' }}>Sample: {currentIndex}</Title>
-                    <Group gap='sm' justify='space-between'>
-                        {codeAreaForComment}
-                        {codeAreaForCode}
-                    </Group>
+            currentIndex
+                ?
+                <Container p='0'>
+                    <Center>
+                        <AlignmentLabels
+                            labels={labels}     // TODO show number of tokens under labels, and highlight and mention those has no token
+                            setLabels={setLabelsWithDefaultColor}
+                            onClickLabel={clickLabelCallback}
+                        />
+                    </Center>
+                    <Container p='0 1em'>
+                        <Title order={4} style={{ padding: '0.3em 0' }}>Sample: {currentIndex}</Title>
+                        <Group gap='sm' justify='space-between'>
+                            {codeAreaForComment}
+                            {codeAreaForCode}
+                        </Group>
+                    </Container>
+                    <Space h='lg'></Space>
+                    {operationRow}
                 </Container>
-                <Space h='lg'></Space>
-                { operationRow }    
-            </Container>
-            :
-            <Center h='300'>
-                <Text c='gray'>
-                    No instance is loaded
-                </Text>
-            </Center>
+                :
+                <Center h='300'>
+                    <Text c='gray'>
+                        No instance is loaded
+                    </Text>
+                </Center>
     ), [loaderOpened, currentIndex, labels, codeAreaForComment, codeAreaForCode, clickLabelCallback]);
 
     const getCodeSampleIndices = useMemo(() => {
-        const cache = rawCodeSamples.map((s) => s.index)
+        const cache = rawCodeSamples.map((s) => s.index);
         return () => cache;
     }, [rawCodeSamples]);
 
     const getTeacherSamples = useCallback((idx: number) => {
         return teachersProvider.getTeachers(idx);
     }, [teachersProvider]);
-    
+
     const teacherSamples = useMemo(() => {
         return getTeacherSamples(currentIndex);
     }, [currentIndex, teachersProvider, getTeacherSamples]);
@@ -697,12 +696,12 @@ export function Feature() {
                                                     radius='sm'
                                                     size='sm'
                                                 >
-                                                    { key }
+                                                    {key}
                                                 </Badge>
                                                 <Text
                                                     size='sm'
                                                 >
-                                                    { tryStringifyJson(teacher[key]) }
+                                                    {tryStringifyJson(teacher[key])}
                                                 </Text>
                                             </Group>
                                         )
@@ -720,7 +719,7 @@ export function Feature() {
             :
             null;
     }, [teacherSamples, rawCodeSamples, rawCommentSamples, labelingProvider, labels]);
-    
+
     const teacherSamplesArea = (
         <>
             <Space h='xl'></Space>
@@ -750,7 +749,7 @@ export function Feature() {
             duration={400}
             timingFunction="ease"
         >
-            {(styles) => <div style={styles}>{ teacherSamplesArea }</div>}
+            {(styles) => <div style={styles}>{teacherSamplesArea}</div>}
         </Transition>
         ;
 
@@ -763,22 +762,145 @@ export function Feature() {
     //     >
     //     </TagsInput>
     // });
-    
+
     const resetLabelColors = useCallback(() => {
         config.labelColors = getDefaultLabelColors();
-    }, [])
+    }, []);
 
     const [moreSettingsModalOpened, setMoreSettingsModalOpened] = useState(false);
     const [activeColorIndex, setActiveColorIndex] = useState<number | null>(null);
 
     const [resetColorPopoverOpened, setResetColorPopoverOpened] = useState(false);
     const resetColorPopoverRef = useClickOutside(() => setResetColorPopoverOpened(false));
-    
+
     const moreSettingsModal = useMemo(() => (
-        <Modal
+        <MoreSettingsModal
             opened={moreSettingsModalOpened}
+            onClose={() => setMoreSettingsModalOpened(false)}
+            config={config}
+            activeColorIndex={activeColorIndex}
+            setActiveColorIndex={setActiveColorIndex}
+            resetColorPopoverOpened={resetColorPopoverOpened}
+            setResetColorPopoverOpened={setResetColorPopoverOpened}
+            resetLabelColors={resetLabelColors}
+            resetColorPopoverRef={resetColorPopoverRef}
+        />
+    ), [config, moreSettingsModalOpened, activeColorIndex, resetColorPopoverOpened]);
+
+
+    const getCodeCommentSample = useCallback((i: number) => {
+        const codeSample = getValidSample(rawCodeSamples, i);
+        const commentSample = getValidSample(rawCommentSamples, i);
+
+        if (codeSample && commentSample) {
+            return {
+                codeTokens: getValidSample(rawCodeSamples, i)!.tokens,
+                commentTokens: getValidSample(rawCommentSamples, i)!.tokens,
+            };
+        }
+
+        return undefined;
+    }, [rawCodeSamples, rawCommentSamples]);
+
+    const getRefCodeCommentSamples = useCallback((i: number) => {
+        const teacherSamples = getTeacherSamples(i);
+        if (teacherSamples && teacherSamples.length > 0) {
+            const mappedSamples = teacherSamples
+                .map((s) => {
+                    const refSample = {
+                        codeTokens: getValidSample(rawCodeSamples, s.teacher_idx)?.tokens,
+                        commentTokens: getValidSample(rawCommentSamples, s.teacher_idx)?.tokens,
+                        labeling: labelingProvider.getLabelingOnSample(s.teacher_idx)
+                    };
+                    if (refSample.codeTokens && refSample.commentTokens && refSample.labeling) {
+                        return refSample as LabeledCodeCommentSample;
+                    } else {
+                        return undefined;
+                    }
+                })
+                .filter((r) => r !== undefined);
+
+            return mappedSamples;
+        } else {
+            return [];
+        }
+    }, [teacherSamples, codeSamples, commentSamples]);
+
+    const applyConvertedOutput = useCallback((output: string) => {
+        try {
+            const rawRangeLabeling = JSON.parse(output);
+            const rawIndexLabeling = matchToIndices(rawRangeLabeling);
+            labelingProvider.setRawIndexLabelingOnSample(currentIndex, rawIndexLabeling);
+            setLabelingProvider(labelingProvider.copy());
+        } catch {
+            console.warn(`Cannot apply labeling due to mis-resolution: `, output);
+        }
+    }, [labelingProvider]);
+
+    const [modelQueryModalOpened, setModelQueryModalOpened] = useState(false);
+
+    const modelQueryModal = useMemo(() => (
+        shouldOpenModelQueryModal &&
+        <TokenAlignmentModal
+            baseUrl={config.gptApiUrl}
+            apiKey={config.openAiApiKey}
+            opened={modelQueryModalOpened}
+            targetIndex={currentIndex}
+            getStudentIndices={getCodeSampleIndices}
+            getTeacherIndices={() => getTeacherSamples(currentIndex)?.map((s) => s.teacher_idx) ?? []}
+            getSample={getCodeCommentSample}
+            getRefSamples={getRefCodeCommentSamples}   // FIXME rewrite all "teacher" samples to "ref" samples
+            onClose={() => setModelQueryModalOpened(false)}
+            onApplyConvertedOutput={applyConvertedOutput}
+        />
+    ), [config, modelQueryModalOpened, currentIndex, getCodeCommentSample, getRefCodeCommentSamples, getTeacherSamples, applyConvertedOutput]);
+
+    return (
+        <div className={className} style={{ width: '960px' }}>
+            {loadingOptions}
+            <Space h='sm'></Space>
+            {displayOptions}
+            <Space h='md'></Space>
+            <Divider />
+            <Space h='md'></Space>
+            {navigationRow}
+            <Space h='lg'></Space>
+            {textLabelingArea}
+            {optionalTeacherSamplesArea}
+
+            {saveLabelingModal}
+            {moreSettingsModal}
+            {modelQueryModal}
+        </div>
+    );
+}
+
+function MoreSettingsModal({
+    opened,
+    onClose,
+    config,
+    activeColorIndex,
+    setActiveColorIndex,
+    resetColorPopoverOpened,
+    setResetColorPopoverOpened,
+    resetLabelColors,
+    resetColorPopoverRef
+}: {
+    opened: boolean;
+    onClose: () => void;
+    config: WritableConfig<typeof globalMakerConfigSchema>;
+    activeColorIndex: number | null;
+    setActiveColorIndex: (index: number | null) => void;
+    resetColorPopoverOpened: boolean;
+    setResetColorPopoverOpened: (opened: boolean) => void;
+    resetLabelColors: () => void;
+    resetColorPopoverRef: React.RefObject<HTMLDivElement>;
+}) {
+    return (
+        <Modal
+            opened={opened}
             onClose={() => {
-                setMoreSettingsModalOpened(false);
+                onClose();
                 setActiveColorIndex(null);
             }}
             title="More Settings"
@@ -786,6 +908,7 @@ export function Feature() {
         >
             <Stack p='0 0 1em'>
                 <Container p={0} w='100%'>
+                    <Title order={4} p='0 0 0.2em 0'>Style</Title>
                     <Group gap={6} w='fit-content'>
                         <Text size='sm' fw={600}>Label Colors</Text>
                         <Popover
@@ -883,23 +1006,23 @@ export function Feature() {
                         label="Full Text File"
                         placeholder="file that contains full text of code and comments"
                         value={config.fullTextFile}
-                        onChange={(e) => { config.fullTextFile = e.target.value }}
-                        onFocus={(e) => { e.target.select() }}
+                        onChange={(e) => { config.fullTextFile = e.target.value; }}
+                        onFocus={(e) => { e.target.select(); }}
                     />
                     <Group p={0} grow justify='space-between'>
                         <TextInput
                             label="Code Tokens File"
                             placeholder="file with code tokens"
                             value={config.completeCodeTokensFile}
-                            onChange={(e) => { config.completeCodeTokensFile = e.target.value }}
-                            onFocus={(e) => { e.target.select() }}
+                            onChange={(e) => { config.completeCodeTokensFile = e.target.value; }}
+                            onFocus={(e) => { e.target.select(); }}
                         />
                         <TextInput
                             label="Comment Tokens File"
                             placeholder="file with comment tokens"
                             value={config.completeCommentTokensFile}
-                            onChange={(e) => { config.completeCommentTokensFile = e.target.value }}
-                            onFocus={(e) => { e.target.select() }}
+                            onChange={(e) => { config.completeCommentTokensFile = e.target.value; }}
+                            onFocus={(e) => { e.target.select(); }}
                         />
                     </Group>
                     <Group p={0} grow justify='space-between'>
@@ -907,15 +1030,15 @@ export function Feature() {
                             label="Labeling File"
                             placeholder="file with concrete labeling"
                             value={config.labelingFile}
-                            onChange={(e) => { config.labelingFile = e.target.value }}
-                            onFocus={(e) => { e.target.select() }}
+                            onChange={(e) => { config.labelingFile = e.target.value; }}
+                            onFocus={(e) => { e.target.select(); }}
                         />
                         <TextInput
                             label="Teachers File"
                             placeholder="file with teachers information"
                             value={config.teacherFile}
-                            onChange={(e) => { config.teacherFile = e.target.value }}
-                            onFocus={(e) => { e.target.select() }}
+                            onChange={(e) => { config.teacherFile = e.target.value; }}
+                            onFocus={(e) => { e.target.select(); }}
                         />
                     </Group>
                 </Container>
@@ -925,104 +1048,20 @@ export function Feature() {
                         label="Model API URL"
                         placeholder="address of OpenAI model API"
                         value={config.gptApiUrl}
-                        onChange={(e) => { config.gptApiUrl = e.target.value }}
-                        onFocus={(e) => { e.target.select() }}
+                        onChange={(e) => { config.gptApiUrl = e.target.value; }}
+                        onFocus={(e) => { e.target.select(); }}
                     />
                     <TextInput
                         label="OpenAI API Key"
                         placeholder="a valid API key"
                         value={config.openAiApiKey}
-                        onChange={(e) => { config.openAiApiKey = e.target.value }}
-                        onFocus={(e) => { e.target.select() }}
+                        onChange={(e) => { config.openAiApiKey = e.target.value; }}
+                        onFocus={(e) => { e.target.select(); }}
                     />
                 </Container>
-            </Stack>
-        </Modal>
-    ), [config, moreSettingsModalOpened, activeColorIndex, resetColorPopoverOpened]);
-
-    const getCodeCommentSample = useCallback((i: number) => {
-        const codeSample = getValidSample(rawCodeSamples, i);
-        const commentSample = getValidSample(rawCommentSamples, i);
-
-        if (codeSample && commentSample) {
-            return {
-                codeTokens: getValidSample(rawCodeSamples, i)!.tokens,
-                commentTokens: getValidSample(rawCommentSamples, i)!.tokens,
-            }
-        }
-        
-        return undefined;
-    }, [rawCodeSamples, rawCommentSamples]);
-
-    const getRefCodeCommentSamples = useCallback((i: number) => {
-        const teacherSamples = getTeacherSamples(i);
-        if (teacherSamples && teacherSamples.length > 0) {
-            const mappedSamples = teacherSamples
-                .map((s) => {
-                    const refSample = {
-                        codeTokens: getValidSample(rawCodeSamples, s.teacher_idx)?.tokens,
-                        commentTokens: getValidSample(rawCommentSamples, s.teacher_idx)?.tokens,
-                        labeling: labelingProvider.getLabelingOnSample(s.teacher_idx)
-                    }
-                    if (refSample.codeTokens && refSample.commentTokens && refSample.labeling) {
-                        return refSample as LabeledCodeCommentSample;
-                    } else {
-                        return undefined;
-                    }
-                })
-                .filter((r) => r !== undefined);
-            
-            return mappedSamples;
-        } else {
-            return [];
-        }
-    }, [teacherSamples, codeSamples, commentSamples]);
-
-    const applyConvertedOutput = useCallback((output: string) => {
-        try {
-            const rawRangeLabeling = JSON.parse(output);
-            const rawIndexLabeling = matchToIndices(rawRangeLabeling);
-            labelingProvider.setRawIndexLabelingOnSample(currentIndex, rawIndexLabeling);
-            setLabelingProvider(labelingProvider.copy());
-        } catch {
-            console.warn(`Cannot apply labeling due to mis-resolution: `, output);
-        }
-    }, [labelingProvider]);
-
-    const [modelQueryModalOpened, setModelQueryModalOpened] = useState(false);
-
-    const modelQueryModal = useMemo(() => (
-        shouldOpenModelQueryModal &&
-        <TokenAlignmentModal
-            baseUrl={config.gptApiUrl}
-            apiKey={config.openAiApiKey}
-            opened={modelQueryModalOpened}
-            targetIndex={currentIndex}
-            getStudentIndices={getCodeSampleIndices}
-            getTeacherIndices={() => getTeacherSamples(currentIndex)?.map((s) => s.teacher_idx) ?? []}
-            getSample={getCodeCommentSample}
-            getRefSamples={getRefCodeCommentSamples}   // FIXME rewrite all "teacher" samples to "ref" samples
-            onClose={() => setModelQueryModalOpened(false)}
-            onApplyConvertedOutput={applyConvertedOutput}
-        />
-    ), [config, modelQueryModalOpened, currentIndex, getCodeCommentSample, getRefCodeCommentSamples, getTeacherSamples, applyConvertedOutput]);
-
-    return (
-        <div className={className} style={{ width: '960px' }}>
-            { loadingOptions }
-            <Space h='sm'></Space>
-            { displayOptions }
-            <Space h='md'></Space>
-            <Divider />
-            <Space h='md'></Space>
-            { navigationRow }
-            <Space h='lg'></Space>
-            { textLabelingArea }
-            { optionalTeacherSamplesArea }
-            
-            { saveLabelingModal }
-            { moreSettingsModal }
-            { modelQueryModal }
-        </div>
+            </Stack >
+        </Modal >
     );
 }
+
+
